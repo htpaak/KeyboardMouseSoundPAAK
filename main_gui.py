@@ -12,8 +12,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QComboBox, QSlider, QFrame, QSplitter, QStyleFactory,
     QMessageBox, QSystemTrayIcon, QMenu, QAction # QMessageBox, QSystemTrayIcon, QMenu, QAction 추가
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread # QThread 추가
-from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, QUrl # QThread, QUrl 추가
+from PyQt5.QtGui import QIcon, QDesktopServices # QDesktopServices 추가
 
 # 기존 모듈 임포트 (유지)
 from keyboard_listener import KeyboardListener
@@ -280,11 +280,27 @@ class MainWindow(QMainWindow):
         mouse_layout.setAlignment(Qt.AlignTop)
         splitter.addWidget(mouse_frame)
 
-        # m_title을 인스턴스 변수로 변경
+        # --- 제목 + 피드백 버튼 레이아웃 --- #
+        m_title_layout = QHBoxLayout()
+        # --- m_title 정의 추가 --- #
         self.m_title = QLabel("Mouse Sounds 🖱️")
         self.m_title.setStyleSheet("font-size: 12pt; font-weight: bold;")
-        self.m_title.setObjectName("TitleLabel") # ObjectName 설정 위치 이동
-        mouse_layout.addWidget(self.m_title)
+        self.m_title.setObjectName("TitleLabel")
+        # --- m_title 정의 끝 --- #
+        m_title_layout.addWidget(self.m_title)
+        m_title_layout.addStretch(1) # 버튼을 오른쪽으로 밀기
+
+        self.feedback_button = QPushButton("💬")
+        self.feedback_button.setToolTip("Send Feedback")
+        self.feedback_button.setFlat(True) # 버튼 배경 투명하게
+        # self.feedback_button.setFixedSize(25, 25) # 버튼 크기 고정 (임시 주석 처리)
+        # 스타일시트 복원 (font-size 제외) + 패딩 제거
+        self.feedback_button.setStyleSheet("QPushButton { border: none; padding: 0px; } QPushButton:hover { background-color: #e9ecef; }")
+        self.feedback_button.adjustSize() # 내용에 맞게 크기 조정 시도
+        m_title_layout.addWidget(self.feedback_button)
+        # --- 제목 + 피드백 버튼 레이아웃 끝 --- #
+
+        mouse_layout.addLayout(m_title_layout) # 수정된 제목 레이아웃 추가
 
         # Click Sound 선택
         m_sound_layout = QHBoxLayout()
@@ -524,6 +540,9 @@ class MainWindow(QMainWindow):
         # 마우스 GUI 업데이트 시그널
         self.update_mouse_button_signal.connect(self._update_mouse_button_state)
 
+        # 피드백 버튼 클릭
+        self.feedback_button.clicked.connect(self._open_feedback_link)
+
     # --- 슬롯(콜백) 메서드 --- #
     def _keyboard_pack_changed(self, pack_name):
         self.keyboard_selected_pack = pack_name
@@ -556,6 +575,12 @@ class MainWindow(QMainWindow):
         self.mouse_start_button.setEnabled(not is_running)
         self.mouse_stop_button.setEnabled(is_running)
         self.mouse_sound_combobox.setEnabled(not is_running)
+
+    def _open_feedback_link(self):
+        """피드백 링크를 기본 웹 브라우저에서 엽니다."""
+        feedback_url = QUrl("https://github.com/htpaak/KeyboardMouseSoundPAAK/discussions")
+        print(f"Opening feedback link: {feedback_url.toString()}")
+        QDesktopServices.openUrl(feedback_url)
 
     def start_keyboard_sound(self):
         if self.keyboard_is_running:
