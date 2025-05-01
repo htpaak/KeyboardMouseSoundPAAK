@@ -1,7 +1,9 @@
 import tkinter as tk
-from tkinter import ttk
+# from tkinter import ttk # ttkbootstrap 사용으로 주석 처리 또는 제거
 from tkinter import messagebox
 import os
+import ttkbootstrap as ttk # ttkbootstrap 임포트
+from ttkbootstrap.constants import * # ttkbootstrap 상수 임포트 (선택적)
 
 # 모듈 임포트
 from keyboard_listener import KeyboardListener
@@ -69,21 +71,10 @@ SPECIAL_KEY_MAP = {
 }
 
 class KeyboardSoundApp:
-    def __init__(self, master):
+    def __init__(self, master: ttk.Window): # 타입 힌트 ttk.Window로 변경
         self.master = master
-        master.title("Sound Input Simulator") # 제목 변경
-        master.resizable(False, False) # 창 크기 조절 비활성화
-
-        # --- 창 크기 계산 로직 (나중에 배치 후 다시 계산 필요) --- #
-        # master.update_idletasks()
-        # window_width = master.winfo_width()
-        # window_height = master.winfo_height()
-        # screen_width = master.winfo_screenwidth()
-        # screen_height = master.winfo_screenheight()
-        # center_x = int(screen_width/2 - window_width/2)
-        # center_y = int(screen_height/2 - window_height/2)
-        # master.geometry(f'+{center_x}+{center_y}')
-        # ------------------------- #
+        master.title("🎧 Sound Input Fun! 🖱️") # 귀여운 이모지 추가 시도
+        master.resizable(False, False)
 
         # --- 인스턴스 변수 초기화 --- #
         # 공통
@@ -108,83 +99,105 @@ class KeyboardSoundApp:
         # --------------------------- #
 
         # --- GUI 위젯 생성 --- #
-        # 부모 프레임 (좌우 분할용)
-        parent_frame = ttk.Frame(master, padding="10")
+        # 부모 프레임
+        parent_frame = ttk.Frame(master, padding=15) # 전체 패딩 증가
         parent_frame.pack(expand=True, fill=tk.BOTH)
 
         # --- 키보드 영역 (왼쪽) --- #
-        keyboard_section_frame = ttk.LabelFrame(parent_frame, text="Keyboard", padding="10")
-        keyboard_section_frame.pack(side=tk.LEFT, padx=(0, 5), fill=tk.BOTH, expand=True)
+        # LabelFrame 대신 일반 Frame과 Separator 사용 고려 (테마 적용 위해)
+        keyboard_section_frame = ttk.Frame(parent_frame, padding=(0, 0, 10, 0)) # 오른쪽 패딩 추가
+        keyboard_section_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # 키보드: 사운드 선택
-        k_sound_frame = ttk.LabelFrame(keyboard_section_frame, text="Sound Options", padding="5") # 패딩 줄임
-        k_sound_frame.pack(fill=tk.X, pady=(0,5))
+        # 키보드 제목
+        k_title = ttk.Label(keyboard_section_frame, text="Keyboard Sounds ⌨️", font=("Segoe UI", 12, "bold"))
+        k_title.pack(pady=(0, 10))
 
-        k_sound_label = ttk.Label(k_sound_frame, text="Select Sound Pack:")
+        # 키보드: 사운드 선택 (Frame으로 변경)
+        k_sound_frame = ttk.Frame(keyboard_section_frame, padding=5)
+        k_sound_frame.pack(fill=tk.X, pady=(0,10))
+
+        k_sound_label = ttk.Label(k_sound_frame, text="Sound Pack:") # 레이블 간소화
         k_sound_label.pack(side=tk.LEFT, padx=(0, 5))
 
         k_default_sound = self.keyboard_sound_options[0] if self.keyboard_sound_options and self.keyboard_sound_options[0] not in ["None", "Error"] else "None"
         self.keyboard_sound_var.set(k_default_sound)
-        self.keyboard_sound_combobox = ttk.Combobox(k_sound_frame, textvariable=self.keyboard_sound_var, values=self.keyboard_sound_options, state="readonly", width=10)
+        # Combobox 스타일 변경 (선택적 - 테마에 따라 자동 적용될 수 있음)
+        self.keyboard_sound_combobox = ttk.Combobox(k_sound_frame, textvariable=self.keyboard_sound_var, values=self.keyboard_sound_options, state="readonly", width=12) # 너비 조금 늘림
         self.keyboard_sound_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X)
 
-        # 키보드: 볼륨 조절
-        k_volume_frame = ttk.LabelFrame(keyboard_section_frame, text="Volume Control", padding="5") # 패딩 줄임
-        k_volume_frame.pack(fill=tk.X, pady=5)
+        # 키보드: 볼륨 조절 (Frame으로 변경)
+        k_volume_frame = ttk.Frame(keyboard_section_frame, padding=5)
+        k_volume_frame.pack(fill=tk.X, pady=10)
 
-        self.keyboard_volume_scale = ttk.Scale(k_volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self._update_keyboard_volume) # 콜백 함수명 변경
+        k_vol_label = ttk.Label(k_volume_frame, text="Volume:")
+        k_vol_label.pack(side=tk.LEFT, padx=(0,5))
+
+        # Scale 스타일 변경 (bootstyle='info' 등 추가 가능)
+        self.keyboard_volume_scale = ttk.Scale(k_volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self._update_keyboard_volume, bootstyle="info")
         self.keyboard_volume_scale.set(self.keyboard_volume)
         self.keyboard_volume_scale.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
 
-        self.keyboard_volume_label = ttk.Label(k_volume_frame, text=f"{self.keyboard_volume}%")
+        self.keyboard_volume_label = ttk.Label(k_volume_frame, text=f"{self.keyboard_volume:3d}%", width=4, anchor="e") # 너비 고정 및 오른쪽 정렬
         self.keyboard_volume_label.pack(side=tk.LEFT)
 
-        # 키보드: 시작/종료 버튼
-        k_button_frame = ttk.Frame(keyboard_section_frame, padding="5")
-        k_button_frame.pack(fill=tk.X)
+        # 키보드: 시작/종료 버튼 (Frame 변경 및 버튼 스타일 적용)
+        k_button_frame = ttk.Frame(keyboard_section_frame, padding=5)
+        k_button_frame.pack(fill=tk.X, pady=(10, 0))
 
-        self.keyboard_start_button = ttk.Button(k_button_frame, text="Start", command=self.start_keyboard_sound, width=10) # 커맨드 함수명 변경
-        self.keyboard_start_button.pack(side=tk.LEFT, expand=True, padx=2)
+        # Button 스타일 변경 (bootstyle='success', 'danger' 등)
+        self.keyboard_start_button = ttk.Button(k_button_frame, text="Start", command=self.start_keyboard_sound, width=8, bootstyle="success") # 너비 줄임
+        self.keyboard_start_button.pack(side=tk.LEFT, expand=True, padx=5)
 
-        self.keyboard_stop_button = ttk.Button(k_button_frame, text="Stop", command=self.stop_keyboard_sound, state=tk.DISABLED, width=10) # 커맨드 함수명 변경
-        self.keyboard_stop_button.pack(side=tk.LEFT, expand=True, padx=2)
+        self.keyboard_stop_button = ttk.Button(k_button_frame, text="Stop", command=self.stop_keyboard_sound, state=tk.DISABLED, width=8, bootstyle="danger-outline") # 아웃라인 스타일
+        self.keyboard_stop_button.pack(side=tk.LEFT, expand=True, padx=5)
+
+        # --- 구분선 --- #
+        separator = ttk.Separator(parent_frame, orient='vertical')
+        separator.pack(side=tk.LEFT, fill='y', padx=10)
 
         # --- 마우스 영역 (오른쪽) --- #
-        mouse_section_frame = ttk.LabelFrame(parent_frame, text="Mouse", padding="10")
-        mouse_section_frame.pack(side=tk.RIGHT, padx=(5, 0), fill=tk.BOTH, expand=True)
+        mouse_section_frame = ttk.Frame(parent_frame, padding=(10, 0, 0, 0)) # 왼쪽 패딩 추가
+        mouse_section_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        # 마우스 제목
+        m_title = ttk.Label(mouse_section_frame, text="Mouse Sounds 🖱️", font=("Segoe UI", 12, "bold"))
+        m_title.pack(pady=(0, 10))
 
         # 마우스: 사운드 선택
-        m_sound_frame = ttk.LabelFrame(mouse_section_frame, text="Click Sound", padding="5") # 레이블 변경
-        m_sound_frame.pack(fill=tk.X, pady=(0,5))
+        m_sound_frame = ttk.Frame(mouse_section_frame, padding=5)
+        m_sound_frame.pack(fill=tk.X, pady=(0,10))
 
-        m_sound_label = ttk.Label(m_sound_frame, text="Select Click Sound:") # 레이블 변경
+        m_sound_label = ttk.Label(m_sound_frame, text="Click Sound:") # 레이블 간소화
         m_sound_label.pack(side=tk.LEFT, padx=(0, 5))
 
         m_default_sound = self.mouse_sound_options[0] if self.mouse_sound_options and self.mouse_sound_options[0] not in ["None", "Error"] else "None"
         self.mouse_sound_var.set(m_default_sound)
-        self.mouse_sound_combobox = ttk.Combobox(m_sound_frame, textvariable=self.mouse_sound_var, values=self.mouse_sound_options, state="readonly", width=10)
+        self.mouse_sound_combobox = ttk.Combobox(m_sound_frame, textvariable=self.mouse_sound_var, values=self.mouse_sound_options, state="readonly", width=12)
         self.mouse_sound_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X)
 
         # 마우스: 볼륨 조절
-        m_volume_frame = ttk.LabelFrame(mouse_section_frame, text="Volume Control", padding="5")
-        m_volume_frame.pack(fill=tk.X, pady=5)
+        m_volume_frame = ttk.Frame(mouse_section_frame, padding=5)
+        m_volume_frame.pack(fill=tk.X, pady=10)
 
-        self.mouse_volume_scale = ttk.Scale(m_volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self._update_mouse_volume) # 콜백 함수명 변경 (추후 구현)
+        m_vol_label = ttk.Label(m_volume_frame, text="Volume:")
+        m_vol_label.pack(side=tk.LEFT, padx=(0,5))
+
+        self.mouse_volume_scale = ttk.Scale(m_volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self._update_mouse_volume, bootstyle="info")
         self.mouse_volume_scale.set(self.mouse_volume)
         self.mouse_volume_scale.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
 
-        self.mouse_volume_label = ttk.Label(m_volume_frame, text=f"{self.mouse_volume}%")
+        self.mouse_volume_label = ttk.Label(m_volume_frame, text=f"{self.mouse_volume:3d}%", width=4, anchor="e")
         self.mouse_volume_label.pack(side=tk.LEFT)
 
         # 마우스: 시작/종료 버튼
-        m_button_frame = ttk.Frame(mouse_section_frame, padding="5")
-        m_button_frame.pack(fill=tk.X)
+        m_button_frame = ttk.Frame(mouse_section_frame, padding=5)
+        m_button_frame.pack(fill=tk.X, pady=(10, 0))
 
-        self.mouse_start_button = ttk.Button(m_button_frame, text="Start", command=self.start_mouse_sound, width=10) # 커맨드 함수명 변경 (추후 구현)
-        self.mouse_start_button.pack(side=tk.LEFT, expand=True, padx=2)
+        self.mouse_start_button = ttk.Button(m_button_frame, text="Start", command=self.start_mouse_sound, width=8, bootstyle="success")
+        self.mouse_start_button.pack(side=tk.LEFT, expand=True, padx=5)
 
-        self.mouse_stop_button = ttk.Button(m_button_frame, text="Stop", command=self.stop_mouse_sound, state=tk.DISABLED, width=10) # 커맨드 함수명 변경 (추후 구현)
-        self.mouse_stop_button.pack(side=tk.LEFT, expand=True, padx=2)
+        self.mouse_stop_button = ttk.Button(m_button_frame, text="Stop", command=self.stop_mouse_sound, state=tk.DISABLED, width=8, bootstyle="danger-outline")
+        self.mouse_stop_button.pack(side=tk.LEFT, expand=True, padx=5)
 
         # --- 창 중앙 정렬 (위젯 배치 후 다시 실행) --- #
         master.update_idletasks() # GUI 업데이트 강제하여 정확한 창 크기 얻기
@@ -205,13 +218,13 @@ class KeyboardSoundApp:
         """키보드 볼륨 스케일 변경 시 호출됨"""
         self.keyboard_volume = int(float(value))
         if hasattr(self, 'keyboard_volume_label') and self.keyboard_volume_label:
-            self.keyboard_volume_label.config(text=f"{self.keyboard_volume}%")
+            self.keyboard_volume_label.config(text=f"{self.keyboard_volume:3d}%")
 
     def _update_mouse_volume(self, value):
         """마우스 볼륨 스케일 변경 시 호출됨 (추후 구현)"""
         self.mouse_volume = int(float(value))
         if hasattr(self, 'mouse_volume_label') and self.mouse_volume_label:
-            self.mouse_volume_label.config(text=f"{self.mouse_volume}%")
+            self.mouse_volume_label.config(text=f"{self.mouse_volume:3d}%")
         # TODO: 마우스 볼륨 로직 구현
         pass
 
@@ -221,7 +234,8 @@ class KeyboardSoundApp:
         base_dir = os.path.join("src", "keyboard") # 경로 확인
         # 디렉토리 생성 로직은 SoundPlayer.load_sound_pack 에서 처리될 수 있으므로 여기선 생략 가능
         if not os.path.isdir(base_dir):
-            messagebox.showwarning("Directory Not Found", f"Keyboard sound directory not found: {base_dir}")
+            # messagebox 대신 logger 사용 고려
+            print(f"[WARN] Keyboard sound directory not found: {base_dir}")
             return ["None"]
 
         available_packs = []
@@ -541,7 +555,12 @@ if __name__ == "__main__":
     # # 메인 스레드는 여기서 종료될 수 있음 (daemon=True 이므로)
     # # 또는 tk_thread.join()으로 대기
 
-    # 일단 표준 방식으로 실행
-    root = tk.Tk()
+    # ttkbootstrap 테마 적용하여 Window 생성
+    root = ttk.Window(themename="litera") # 테마 이름 선택 (예: litera, journal, darkly, superhero 등)
+
+    # 로깅 설정 (필요한 경우)
+    # import logging
+    # logging.basicConfig(level=logging.INFO)
+
     app = KeyboardSoundApp(root)
     root.mainloop() 
