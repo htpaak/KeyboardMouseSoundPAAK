@@ -133,6 +133,7 @@ class MainWindow(QMainWindow):
         self.mouse_selected_sound = "None" # 선택된 사운드 파일 이름 저장
         self.mouse_volume = 100
         self.mouse_sound_options = self._find_available_mouse_sounds()
+        self.pressed_keys = set() # 현재 눌린 키 추적용 집합
         # -------------------------------------------
 
         self.init_ui()
@@ -727,7 +728,9 @@ class MainWindow(QMainWindow):
     def _handle_key_press(self, key):
         if self.keyboard_is_running and self.sound_player:
             key_name = self._key_to_filename(key)
-            if key_name:
+            # 키가 유효하고, 아직 눌린 상태가 아닐 때만 처리
+            if key_name and key_name not in self.pressed_keys:
+                self.pressed_keys.add(key_name) # 눌린 키 집합에 추가
                 row_index = KEY_ROW_MAP.get(key_name, None)
                 effective_row = 4 if row_index is None or row_index > 4 else row_index
                 self.sound_player.play_key_sound(
@@ -737,17 +740,25 @@ class MainWindow(QMainWindow):
                     self.keyboard_volume,
                     row_index=effective_row
                 )
+            # else: # 디버깅용: 반복 입력 무시 로그
+            #     if key_name:
+            #         print(f"Key '{key_name}' already pressed, ignoring repeat.")
 
     def _handle_key_release(self, key):
         if self.keyboard_is_running and self.sound_player:
             key_name = self._key_to_filename(key)
-            if key_name:
+            # 키가 유효하고, 눌린 상태였을 때만 처리
+            if key_name and key_name in self.pressed_keys:
+                self.pressed_keys.remove(key_name) # 눌린 키 집합에서 제거
                 self.sound_player.play_key_sound(
                     self.keyboard_selected_pack,
                     "release",
                     key_name,
                     self.keyboard_volume
                 )
+            # else: # 디버깅용: 예상치 못한 release 이벤트 로그
+            #     if key_name:
+            #         print(f"Key '{key_name}' released but wasn't in pressed_keys set.")
 
     def _handle_mouse_click(self, x, y, button, pressed):
         # TODO: 마우스 기능 구현 시 필요
