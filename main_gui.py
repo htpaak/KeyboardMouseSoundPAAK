@@ -139,7 +139,7 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         """UI 요소들을 초기화하고 배치합니다."""
-        self.setWindowTitle("🎧 Sound Input Fun! 🖱️")
+        self.setWindowTitle("KeyboardMouseSoundPAAK")
         self.setMinimumSize(500, 200) # 최소 높이 250 -> 200 으로 변경
 
         # --- 메인 위젯 및 레이아웃 설정 ---

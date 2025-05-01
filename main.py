@@ -6,12 +6,12 @@ from log_setup import setup_logging
 from PyQt5.QtWidgets import QApplication # PyQt5 임포트
 from PyQt5.QtGui import QIcon # PyQt5 임포트
 from PyQt5.QtCore import Qt # Qt 임포트 추가
-# from main_gui import KeyboardSoundApp # Tkinter GUI 제거 (추후 PyQt5 GUI 임포트)
+# from main_gui import KeyboardMouseSoundPAAK # Tkinter GUI 제거 (추후 PyQt5 GUI 임포트)
 
 setup_logging() # 항상 호출 (내부에서 조건 확인)
 
 COMPANY_NAME = "htpaak"
-PRODUCT_NAME = "KeyboardSoundApp"
+PRODUCT_NAME = "KeyboardMouseSoundPAAK"
 APP_VERSION = "1.0.0" # 버전 정의 (필요시)
 MYAPPID = f"{COMPANY_NAME}.{PRODUCT_NAME}.{APP_VERSION}" # AppUserModelID 정의
 ICON_PATH = os.path.abspath(os.path.join("assets", "icon.ico")) # 아이콘 경로 정의
