@@ -14,7 +14,22 @@ COMPANY_NAME = "htpaak"
 PRODUCT_NAME = "KeyboardMouseSoundPAAK"
 APP_VERSION = "1.0.0" # 버전 정의 (필요시)
 MYAPPID = f"{COMPANY_NAME}.{PRODUCT_NAME}.{APP_VERSION}" # AppUserModelID 정의
-ICON_PATH = os.path.abspath(os.path.join("assets", "icon.ico")) # 아이콘 경로 정의
+# --- 리소스 경로 헬퍼 함수 --- #
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+        # print(f"Running in PyInstaller bundle, base path: {base_path}") # 디버깅용
+    except Exception:
+        # Not packaged, use normal path relative to main script
+        base_path = os.path.abspath(".")
+        # print(f"Running in development, base path: {base_path}") # 디버깅용
+
+    return os.path.join(base_path, relative_path)
+# --- 헬퍼 함수 끝 --- #
+
+ICON_PATH = resource_path(os.path.join("assets", "icon.ico")) # 아이콘 경로 정의 (resource_path 사용)
 
 # --- DPI 스케일링 활성화 (QApplication 생성 전) ---
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)

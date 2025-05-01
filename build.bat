@@ -39,21 +39,20 @@ REM PyInstaller 실행:
 REM --noconsole: 콘솔 창 없이 실행 (GUI 애플리케이션용)
 REM --onefile: 모든 파일을 하나의 실행 파일(.exe)로 묶음
 REM --clean: 빌드 전 캐시 정리
-REM --icon="assets/icon.ico": 실행 파일 아이콘 설정 (경로에 공백이 있을 수 있으므로 따옴표 사용)
-REM --add-data "assets;assets": assets 폴더 및 내용 포함 (애플리케이션에 따라 수정/제거)
-REM --exclude-module: 특정 모듈 제외 (테스트 등)
-REM --hidden-import: 누락된 모듈 명시적 포함
-REM --name="MyApplication": 생성될 실행 파일의 이름 지정
+REM --icon="assets/icon.ico": 실행 파일 아이콘 설정
+REM --add-data "<소스>;<대상>": 데이터 파일/폴더 포함 (assets: 아이콘 등, src: 사운드 파일)
+REM --name="KeyboardMouseSoundPAAK": 생성될 실행 파일의 이름 지정
 REM main.py: 빌드할 메인 파이썬 스크립트
+REM --hidden-import: 필요 시 누락된 모듈 강제 포함 (예: --hidden-import=pygame.mixer)
+REM --exclude-module: 필요 시 특정 모듈 제외
+
 pyinstaller --noconsole ^
   --onefile ^
   --clean ^
   --icon="assets/icon.ico" ^
   --add-data "assets;assets" ^
-  --exclude-module=pytest ^
-  --exclude-module=_pytest ^
-  --hidden-import unittest ^
-  --name="MyApplication" ^
+  --add-data "src;src" ^
+  --name="KeyboardMouseSoundPAAK" ^
   main.py
 
 echo.

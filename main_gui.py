@@ -21,6 +21,22 @@ from sound_player import SoundPlayer
 from pynput import keyboard
 from mouse_listener import MouseListener
 
+# --- 리소스 경로 헬퍼 함수 --- #
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        # Not packaged, use normal path relative to this script
+        # __file__ 사용 고려: 현재 파일 위치 기준
+        base_path = os.path.abspath(os.path.dirname(__file__))
+        # 또는 main.py와 동일하게 os.path.abspath(".") 사용 (실행 위치 기준)
+        # base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+# --- 헬퍼 함수 끝 --- #
+
 # --- 상수 정의 (필요시 유지 또는 PyQt5 스타일로 변경) ---
 # KEY_ROW_MAP, SPECIAL_KEY_MAP 등은 로직 마이그레이션 시 함께 검토
 KEY_ROW_MAP = {
@@ -114,10 +130,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # --- 애플리케이션 아이콘 경로 가져오기 ---
+        # --- 애플리케이션 아이콘 경로 가져오기 --- #
         # main.py에서 정의된 ICON_PATH를 가져오거나, 여기서 직접 정의
         # 여기서는 main.py의 경로를 사용한다고 가정 (더 안정적인 방법은 설정 파일 등 사용)
-        self.icon_path = os.path.abspath(os.path.join("assets", "icon.ico")) # main.py와 동일한 경로 사용
+        # self.icon_path = os.path.abspath(os.path.join("assets", "icon.ico")) # 기존 코드
+        self.icon_path = resource_path(os.path.join("assets", "icon.ico")) # resource_path 사용
 
         # --- 인스턴스 변수 초기화 (기존 로직 참고) ---
         self.sound_player = SoundPlayer()
@@ -705,7 +722,8 @@ class MainWindow(QMainWindow):
 
     # --- 사운드 파일/팩 검색 (기존 로직 유지) ---
     def _find_available_keyboard_packs(self):
-        base_dir = os.path.join("src", "keyboard")
+        # base_dir = os.path.join("src", "keyboard") # 기존 코드
+        base_dir = resource_path(os.path.join("src", "keyboard")) # resource_path 사용
         if not os.path.isdir(base_dir):
             print(f"[WARN] Keyboard sound directory not found: {base_dir}")
             return ["None"]
@@ -713,7 +731,8 @@ class MainWindow(QMainWindow):
         return ["None"] + available_packs if available_packs else ["None"]
 
     def _find_available_mouse_sounds(self):
-        base_dir = os.path.join("src", "mouse")
+        # base_dir = os.path.join("src", "mouse") # 기존 코드
+        base_dir = resource_path(os.path.join("src", "mouse")) # resource_path 사용
         if not os.path.isdir(base_dir):
             print(f"[WARN] Mouse sound directory not found: {base_dir}")
             return ["None"]

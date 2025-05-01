@@ -1,6 +1,7 @@
 # 사운드 플레이어 모듈
 import pygame
 import os
+import sys # sys 모듈 임포트 추가
 import time # 사운드 중복 재생 방지용
 import logging # 로깅 추가
 
@@ -12,6 +13,19 @@ logger = logging.getLogger(__name__)
 # handler.setFormatter(formatter)
 # logger.addHandler(handler)
 
+# --- 리소스 경로 헬퍼 함수 --- #
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        # Not packaged, use normal path relative to this script
+        base_path = os.path.abspath(os.path.dirname(__file__))
+
+    return os.path.join(base_path, relative_path)
+# --- 헬퍼 함수 끝 --- #
+
 # --- 키보드 관련 설정 --- #
 # kbsim-master 분석 기반: release 시 특정 사운드가 있는 키들
 SPECIAL_RELEASE_KEYS = {
@@ -22,12 +36,14 @@ SPECIAL_RELEASE_KEYS = {
 }
 
 # --- 마우스 관련 설정 --- #
-MOUSE_SOUND_FOLDER = os.path.join("src", "mouse")
+# MOUSE_SOUND_FOLDER = os.path.join("src", "mouse") # 기존 코드
+MOUSE_SOUND_FOLDER = resource_path(os.path.join("src", "mouse")) # resource_path 사용
 
 class SoundPlayer:
     def __init__(self):
         """사운드 플레이어 초기화"""
-        self.keyboard_base_folder = os.path.join("src", "keyboard") # 변수명 변경
+        # self.keyboard_base_folder = os.path.join("src", "keyboard") # 기존 코드
+        self.keyboard_base_folder = resource_path(os.path.join("src", "keyboard")) # resource_path 사용
         self.mixer_initialized = False
         self.last_play_time = {} # 키별 마지막 재생 시간 기록
         self.sound_cache = {} # 사운드 객체 캐시
@@ -56,9 +72,7 @@ class SoundPlayer:
         logger.info(f"Loading sound pack: '{sound_type}'...")
         self.sound_cache.clear() # 기존 캐시 비우기
         self.current_sound_pack = None # 로드 중 상태로 설정
-        pack_path = os.path.join(self.keyboard_base_folder, sound_type)
-        loaded_count = 0
-        error_count = 0
+        pack_path = os.path.join(self.keyboard_base_folder, sound_type) # 이미 적용됨, 확인용
 
         if not os.path.isdir(pack_path):
             logger.error(f"Sound pack directory not found: {pack_path}")
@@ -77,18 +91,16 @@ class SoundPlayer:
                     try:
                         sound = pygame.mixer.Sound(file_path)
                         self.sound_cache[cache_key] = sound
-                        loaded_count += 1
                         # logger.debug(f"Loaded sound: {cache_key} from {file_path}") # 상세 로드 로그
                     except pygame.error as e:
                         logger.error(f"Failed to load sound '{file_path}': {e}")
-                        error_count += 1
 
-        if loaded_count > 0:
+        if self.sound_cache:
             self.current_sound_pack = sound_type
-            logger.info(f"Successfully loaded {loaded_count} sounds for pack '{sound_type}'. Errors: {error_count}")
+            logger.info(f"Successfully loaded {len(self.sound_cache)} sounds for pack '{sound_type}'")
             return True
         else:
-            logger.error(f"No sounds loaded for pack '{sound_type}'. Errors: {error_count}")
+            logger.error(f"No sounds loaded for pack '{sound_type}'")
             return False
 
     def load_mouse_sound(self, sound_name):
@@ -110,7 +122,8 @@ class SoundPlayer:
         loaded = False
         # --- 파일 찾기: .wav, .mp3, .ogg 순서로 시도 --- #
         for ext in [".wav", ".mp3", ".ogg"]:
-            file_path = os.path.join(MOUSE_SOUND_FOLDER, f"{sound_name}{ext}")
+            # file_path = os.path.join(MOUSE_SOUND_FOLDER, f"{sound_name}{ext}") # resource_path 적용은 MOUSE_SOUND_FOLDER 초기화에서 이미 됨
+            file_path = os.path.join(MOUSE_SOUND_FOLDER, f"{sound_name}{ext}") # 이미 적용됨, 확인용
             if os.path.exists(file_path):
                 try:
                     sound = pygame.mixer.Sound(file_path)
