@@ -327,8 +327,15 @@ class KeyboardSoundApp:
              messagebox.showerror("Error", "Please select a valid sound pack from the list.")
              return
 
-        # 현재 볼륨 값 사용 (start 시점의 값)
         # self.volume = self.volume_scale.get() # _update_volume에서 이미 self.volume 업데이트됨
+
+        # --- 선택된 사운드 팩 미리 로드 --- #
+        if not self.sound_player.load_sound_pack(self.selected_sound_type):
+            messagebox.showerror("Error", f"Failed to load sound pack '{self.selected_sound_type}'. Check logs for details.")
+            # GUI 상태 원래대로 복구 (선택 사항, 필요시 _update_gui_state 호출)
+            # self._update_gui_state() # stop 상태로 돌려놓기
+            return # 로딩 실패 시 리스너 시작 안 함
+        # ---------------------------------- #
 
         # 키보드 리스너 시작
         try:

@@ -2,6 +2,15 @@
 import pygame
 import os
 import time # 사운드 중복 재생 방지용
+import logging # 로깅 추가
+
+# 로거 설정 (main_gui.py와 동일한 설정 사용 권장)
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG) # 필요시 레벨 조정
+# handler = logging.StreamHandler()
+# formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# handler.setFormatter(formatter)
+# logger.addHandler(handler)
 
 # kbsim-master 분석 기반: release 시 특정 사운드가 있는 키들
 # (kbsim 코드의 keySounds[switchValue].press 객체에 존재하는 키들)
@@ -19,19 +28,70 @@ class SoundPlayer:
         """사운드 플레이어 초기화"""
         self.base_sound_folder = os.path.join("src", "audio")
         self.mixer_initialized = False
-        self.last_play_time = {} # 키별 마지막 재생 시간 기록 (중복 방지용)
+        self.last_play_time = {} # 키별 마지막 재생 시간 기록
+        self.sound_cache = {} # 사운드 객체 캐시
+        self.current_sound_pack = None # 현재 로드된 사운드 팩
+
         try:
+            # pre_init으로 버퍼 크기 조정 시도 (값은 실험 필요)
+            pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=256)
             pygame.mixer.init()
-            pygame.mixer.set_num_channels(32)
+            pygame.mixer.set_num_channels(32) # 채널 수 증가 고려
             self.mixer_initialized = True
-            print("Sound player initialized with 32 channels.")
+            logger.info("Sound player initialized.")
         except pygame.error as e:
-            print(f"Failed to initialize pygame mixer: {e}")
+            logger.error(f"Failed to initialize pygame mixer: {e}")
             pygame.mixer.quit()
 
-    def _find_sound_file(self, sound_type, event_type, key_name, row_index=None):
-        """지정된 경로에서 키에 맞는 사운드 파일(.wav 또는 .mp3)을 찾습니다.
-           kbsim 규칙에 따라 fallback 파일을 결정합니다.
+    def load_sound_pack(self, sound_type):
+        """지정된 사운드 팩의 모든 사운드 파일을 미리 로드하여 캐시에 저장합니다."""
+        if not self.mixer_initialized:
+            logger.warning("Mixer not initialized. Cannot load sound pack.")
+            return False
+        if self.current_sound_pack == sound_type:
+            logger.info(f"Sound pack '{sound_type}' is already loaded.")
+            return True
+
+        logger.info(f"Loading sound pack: '{sound_type}'...")
+        self.sound_cache.clear() # 기존 캐시 비우기
+        self.current_sound_pack = None # 로드 중 상태로 설정
+        pack_path = os.path.join(self.base_sound_folder, sound_type)
+        loaded_count = 0
+        error_count = 0
+
+        if not os.path.isdir(pack_path):
+            logger.error(f"Sound pack directory not found: {pack_path}")
+            return False
+
+        for event_type in ["press", "release"]:
+            event_folder = os.path.join(pack_path, event_type)
+            if not os.path.isdir(event_folder):
+                logger.warning(f"Subdirectory not found, skipping: {event_folder}")
+                continue
+
+            for filename in os.listdir(event_folder):
+                if filename.lower().endswith(('.wav', '.mp3')):
+                    file_path = os.path.join(event_folder, filename)
+                    cache_key = (event_type, os.path.splitext(filename)[0].upper()) # (event_type, KEY_NAME)
+                    try:
+                        sound = pygame.mixer.Sound(file_path)
+                        self.sound_cache[cache_key] = sound
+                        loaded_count += 1
+                        # logger.debug(f"Loaded sound: {cache_key} from {file_path}") # 상세 로드 로그
+                    except pygame.error as e:
+                        logger.error(f"Failed to load sound '{file_path}': {e}")
+                        error_count += 1
+
+        if loaded_count > 0:
+            self.current_sound_pack = sound_type
+            logger.info(f"Successfully loaded {loaded_count} sounds for pack '{sound_type}'. Errors: {error_count}")
+            return True
+        else:
+            logger.error(f"No sounds loaded for pack '{sound_type}'. Errors: {error_count}")
+            return False
+
+    def _find_sound_object(self, sound_type, event_type, key_name, row_index=None):
+        """캐시에서 키에 맞는 Sound 객체를 찾습니다.
 
         Args:
             sound_type (str): 사운드 종류 (폴더명).
@@ -40,120 +100,102 @@ class SoundPlayer:
             row_index (int, optional): 키의 행 인덱스 (0-4). press 이벤트에만 사용됨.
 
         Returns:
-            str or None: 찾은 사운드 파일 경로 또는 None.
+            pygame.mixer.Sound or None: 찾은 Sound 객체 또는 None.
         """
         if not self.mixer_initialized or key_name is None:
             return None
+        # 현재 로드된 팩과 요청된 팩이 다르면 로드 시도 또는 None 반환
+        if self.current_sound_pack != sound_type:
+            logger.warning(f"Requested sound pack '{sound_type}' is not loaded. Current: '{self.current_sound_pack}'")
+            # 필요시 여기서 self.load_sound_pack(sound_type) 호출 고려
+            return None
 
-        specific_folder = os.path.join(self.base_sound_folder, sound_type, event_type)
-        # print(f"[DEBUG] Finding sound: Type='{sound_type}', Event='{event_type}', Key='{key_name}', Row={row_index}") # 로그는 잠시 주석처리
+        target_sound_name = None # 찾을 사운드의 이름 (키 이름 또는 fallback 이름)
 
-        # --- Press 이벤트 처리 로직 변경 --- #
+        # --- Press 이벤트 처리 로직 --- #
         if event_type == "press":
-            # 1. Backspace, Space, Enter 인 경우: 개별 파일 먼저 시도
+            # 1. Backspace, Space, Enter 인 경우: 개별 이름 먼저 시도
             if key_name in ["BACKSPACE", "SPACE", "ENTER"]:
-                for ext in [".wav", ".mp3"]:
-                    specific_path = os.path.join(specific_folder, f"{key_name}{ext}")
-                    if os.path.exists(specific_path):
-                        return specific_path
-                # 개별 파일 없으면 fallback 으로 진행 (아래에서 처리)
+                cache_key = (event_type, key_name)
+                if cache_key in self.sound_cache:
+                    return self.sound_cache[cache_key]
+                # 개별 사운드 없으면 fallback 으로 진행
 
-            # 2. 그 외 모든 키 (또는 위 키들의 개별 파일이 없는 경우): Fallback 사용
-            fallback_name = None
+            # 2. 그 외 모든 키 (또는 위 키들의 개별 사운드가 없는 경우): Fallback 이름 사용
             if row_index is not None and 0 <= row_index <= 4:
-                fallback_name = f"GENERIC_R{row_index}"
+                target_sound_name = f"GENERIC_R{row_index}"
             else:
-                fallback_name = "GENERIC_R4"
+                target_sound_name = "GENERIC_R4"
 
-            if fallback_name:
-                for ext in [".wav", ".mp3"]:
-                    fallback_path = os.path.join(specific_folder, f"{fallback_name}{ext}")
-                    if os.path.exists(fallback_path):
-                        return fallback_path
-            # Fallback도 없으면 None 반환
-            return None
-
-        # --- Release 이벤트 처리 로직 (이전과 동일) --- #
+        # --- Release 이벤트 처리 로직 --- #
         elif event_type == "release":
-            # 1. 개별 키 파일 탐색 (모든 키에 대해 시도)
-            for ext in [".wav", ".mp3"]:
-                specific_path = os.path.join(specific_folder, f"{key_name}{ext}")
-                if os.path.exists(specific_path):
-                    return specific_path
+            # 1. 개별 키 이름으로 캐시 탐색 시도
+            cache_key = (event_type, key_name)
+            if cache_key in self.sound_cache:
+                 return self.sound_cache[cache_key]
 
-            # 2. 개별 파일 없고 Backspace, Space, Enter 가 아니면 GENERIC Fallback
-            fallback_name = None
+            # 2. 개별 사운드 없고, 특정 키가 아니면 GENERIC Fallback 이름 사용
             if key_name not in ["BACKSPACE", "SPACE", "ENTER"]:
-                 fallback_name = "GENERIC"
+                 target_sound_name = "GENERIC"
+            # 특정 키인데 개별 사운드 없으면 여기서는 target_sound_name이 None 유지 -> 소리 없음
 
-            if fallback_name:
-                for ext in [".wav", ".mp3"]:
-                    fallback_path = os.path.join(specific_folder, f"{fallback_name}{ext}")
-                    if os.path.exists(fallback_path):
-                        return fallback_path
-            # Fallback도 없으면 None 반환
-            return None
+        # 결정된 target_sound_name으로 캐시 조회
+        if target_sound_name:
+            cache_key = (event_type, target_sound_name)
+            return self.sound_cache.get(cache_key) # 없으면 None 반환
 
-        # event_type 이 press 나 release 가 아닌 경우
+        # 특정 press/release 키에 대한 개별 사운드도 없고 fallback 대상도 아닌 경우
         return None
 
     def play_key_sound(self, sound_type, event_type, key_name, volume_percent, row_index=None):
-        """키 이벤트에 맞는 사운드를 찾아 재생합니다. (행 정보 추가)
-
-        Args:
-            sound_type (str): 사운드 종류 (예: "Typewriter").
-            event_type (str): 이벤트 종류 ("press" 또는 "release").
-            key_name (str): 사운드 파일 이름과 매칭될 키 이름.
-            volume_percent (int): 볼륨 크기 (0 ~ 100).
-            row_index (int, optional): 키의 행 인덱스 (press 이벤트 시).
-        """
+        """키 이벤트에 맞는 캐시된 Sound 객체를 찾아 재생합니다."""
         if not self.mixer_initialized:
             return
 
-        # 중복 재생 방지 (개선: 키 이름뿐 아니라 타입과 이벤트도 고려)
+        # 중복 재생 방지 (기존과 동일)
         current_time = time.time()
         sound_full_key = f"{sound_type}_{event_type}_{key_name}"
         last_played = self.last_play_time.get(sound_full_key, 0)
-        # 재생 간격 임계값 (ms). 너무 짧으면 건너뜀.
-        min_interval = 0.03 # 30ms
+        min_interval = 0.02 # 간격 약간 줄여보기 (30ms -> 20ms)
         if current_time - last_played < min_interval:
-             # print(f"Skipping duplicate play for {sound_full_key}")
+             # logger.debug(f"Skipping duplicate play for {sound_full_key}")
              return
 
-        # 행 정보를 포함하여 사운드 파일 찾기
-        sound_path = self._find_sound_file(sound_type, event_type, key_name, row_index)
+        # 캐시에서 Sound 객체 찾기
+        sound_object = self._find_sound_object(sound_type, event_type, key_name, row_index)
 
-        # --- 로그 추가: 최종 선택된 사운드 경로 출력 --- #
-        if sound_path:
-            print(f"[DEBUG] Play Sound: Path='{sound_path}'")
-        else:
-            # 파일 못 찾은 경우는 _find_sound_file 내부 로그로 확인 가능
-            # print(f"[DEBUG] Play Sound: No sound file found for {sound_type}/{event_type}/{key_name}")
-            pass # 파일 없으면 아무것도 재생 안 함
-
-        if sound_path:
+        if sound_object:
+            # 캐시 키 로깅 (파일 경로 대신)
+            # 재생 대상 찾기 로직에서 cache_key를 반환하도록 수정하거나, 여기서 다시 계산 필요
+            # 여기서는 간단히 key_name으로 로깅
+            logger.debug(f"[DEBUG] Play Sound: Found cached object for {event_type}/{key_name}")
             try:
-                sound = pygame.mixer.Sound(sound_path)
                 volume_float = max(0.0, min(1.0, volume_percent / 100.0))
-                sound.set_volume(volume_float)
-                channel = pygame.mixer.find_channel(True)
+                sound_object.set_volume(volume_float)
+                channel = pygame.mixer.find_channel(True) # 여유 채널 찾기
                 if channel:
-                    channel.play(sound)
+                    channel.play(sound_object)
                     self.last_play_time[sound_full_key] = current_time
-                    # print(f"Playing: {sound_path} on channel {channel}")
-                # else: # 채널 부족 메시지는 너무 자주 나올 수 있어 주석 처리
-                    # print("No available channels to play sound.")
+                    # logger.debug(f"Playing sound on channel {channel}")
+                else:
+                     logger.warning("No available channels to play sound.")
             except pygame.error as e:
-                print(f"Error playing sound '{sound_path}': {e}")
+                logger.error(f"Error playing sound for key '{key_name}': {e}")
             except Exception as e:
-                print(f"Unexpected error playing sound '{sound_path}': {e}")
+                logger.error(f"Unexpected error playing sound for key '{key_name}': {e}")
+        # else:
+            # logger.debug(f"[DEBUG] Play Sound: No sound object found for {sound_type}/{event_type}/{key_name}")
 
     def unload(self):
-        """pygame mixer 종료"""
+        """pygame mixer 종료 및 캐시 비우기"""
         if self.mixer_initialized:
+            pygame.mixer.fadeout(500) # 부드럽게 종료 (선택 사항)
+            pygame.mixer.stop() # 모든 사운드 즉시 중지
             pygame.mixer.quit()
             self.mixer_initialized = False
-            print("Sound player unloaded.")
+            self.sound_cache.clear() # 캐시 비우기
+            self.current_sound_pack = None
+            logger.info("Sound player unloaded and cache cleared.")
 
 
 # --- 테스트용 코드 --- (수정됨)
