@@ -34,6 +34,7 @@ except Exception as appid_e:
 if __name__ == "__main__":
     """애플리케이션 메인 실행 지점 (PyQt5)"""
     app = QApplication(sys.argv) # QApplication 생성
+    app.setQuitOnLastWindowClosed(False) # 마지막 창 닫아도 앱 종료 방지
 
     # --- 애플리케이션 아이콘 설정 ---
     if os.path.exists(ICON_PATH):

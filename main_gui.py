@@ -10,7 +10,7 @@ import traceback # traceback 임포트 추가
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QPushButton, QComboBox, QSlider, QFrame, QSplitter, QStyleFactory,
-    QMessageBox # QMessageBox 추가
+    QMessageBox, QSystemTrayIcon, QMenu, QAction # QMessageBox, QSystemTrayIcon, QMenu, QAction 추가
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread # QThread 추가
 from PyQt5.QtGui import QIcon
@@ -114,6 +114,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        # --- 애플리케이션 아이콘 경로 가져오기 ---
+        # main.py에서 정의된 ICON_PATH를 가져오거나, 여기서 직접 정의
+        # 여기서는 main.py의 경로를 사용한다고 가정 (더 안정적인 방법은 설정 파일 등 사용)
+        self.icon_path = os.path.abspath(os.path.join("assets", "icon.ico")) # main.py와 동일한 경로 사용
+
         # --- 인스턴스 변수 초기화 (기존 로직 참고) ---
         self.sound_player = SoundPlayer()
         self.keyboard_listener_thread = None # 스레드 변수 추가
@@ -132,10 +137,79 @@ class MainWindow(QMainWindow):
 
         self.init_ui()
         self.connect_signals()
+        self.init_tray_icon() # 트레이 아이콘 초기화 호출
 
         # --- 스타일시트 적용 --- #
         self.apply_stylesheet()
         # -----------------------
+
+        self.tray_icon.show() # 트레이 아이콘 표시
+
+    def init_tray_icon(self):
+        """시스템 트레이 아이콘과 메뉴를 설정합니다."""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            print("Warning: System tray not available.")
+            self.tray_icon = None
+            return
+
+        # 트레이 아이콘 생성
+        self.tray_icon = QSystemTrayIcon(self)
+        if os.path.exists(self.icon_path):
+            self.tray_icon.setIcon(QIcon(self.icon_path))
+            print(f"Tray icon set from: {self.icon_path}")
+        else:
+            # 표준 아이콘 사용 (경로 없을 시)
+            self.tray_icon.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+            print(f"Warning: Icon file not found at {self.icon_path}. Using standard icon.")
+
+        self.tray_icon.setToolTip("KeyboardMouseSoundPAAK - Running")
+
+        # 트레이 아이콘 메뉴 생성
+        tray_menu = QMenu()
+        show_action = QAction("Show", self)
+        exit_action = QAction("Exit", self)
+
+        # 액션 연결
+        show_action.triggered.connect(self.show_window)
+        exit_action.triggered.connect(self.quit_application) # 안전 종료 메서드 연결
+
+        tray_menu.addAction(show_action)
+        tray_menu.addAction(exit_action)
+        self.tray_icon.setContextMenu(tray_menu)
+
+        # 트레이 아이콘 클릭 시그널 연결 (더블 클릭 또는 클릭 시 창 표시)
+        self.tray_icon.activated.connect(self.handle_tray_activation)
+
+        self.tray_icon.show() # 트레이 아이콘 표시
+
+    def handle_tray_activation(self, reason):
+        """트레이 아이콘 활성화 시 동작 (클릭, 더블클릭 등)"""
+        # 왼쪽 버튼 클릭 또는 더블 클릭 시 창 표시
+        if reason == QSystemTrayIcon.Trigger or reason == QSystemTrayIcon.DoubleClick:
+            self.show_window()
+
+    def show_window(self):
+        """창을 보이게 하고 활성화합니다."""
+        self.showNormal() # 최소화 상태에서도 복원
+        self.activateWindow() # 창을 앞으로 가져옴
+        self.raise_() # 다른 창 위에 표시 (macOS 등에서 필요할 수 있음)
+
+    def quit_application(self):
+        """애플리케이션을 안전하게 종료합니다."""
+        print("Quit action triggered. Stopping listeners and exiting...")
+        # 리스너 스레드 정리 (존재하는 경우)
+        if self.keyboard_listener_thread and self.keyboard_listener_thread.isRunning():
+            self.keyboard_listener_thread.stop()
+            # self.keyboard_listener_thread.wait() # GUI 멈춤 방지를 위해 wait 제거 또는 짧게 설정
+        if self.mouse_listener_thread and self.mouse_listener_thread.isRunning():
+            self.mouse_listener_thread.stop()
+            # self.mouse_listener_thread.wait()
+
+        # 트레이 아이콘 숨기기 (선택 사항, 종료 시 자동으로 제거될 수 있음)
+        if self.tray_icon:
+            self.tray_icon.hide()
+
+        QApplication.quit() # QApplication 종료
 
     def init_ui(self):
         """UI 요소들을 초기화하고 배치합니다."""
@@ -749,9 +823,22 @@ class MainWindow(QMainWindow):
 
     # --- 애플리케이션 종료 처리 --- #
     def closeEvent(self, event):
-        """QMainWindow의 closeEvent를 오버라이드합니다."""
-        self.on_closing()
-        event.accept()
+        """창 닫기 이벤트 처리 (트레이로 최소화)"""
+        if self.tray_icon and self.tray_icon.isVisible():
+            # 트레이 아이콘이 존재하고 보이면, 창을 숨기고 트레이 메시지 표시
+            event.ignore() # 기본 닫기 동작 취소
+            self.hide()
+            self.tray_icon.showMessage(
+                "KeyboardMouseSoundPAAK",
+                "Application minimized to tray.",
+                QSystemTrayIcon.Information, # 아이콘 타입
+                2000 # 메시지 표시 시간 (ms)
+            )
+            print("Window hidden to system tray.")
+        else:
+            # 트레이 아이콘이 없거나 보이지 않으면, 기본 닫기 동작 수행 (종료)
+            print("No tray icon or not visible, performing default close.")
+            self.quit_application() # 기본 닫기 대신 안전 종료 호출
 
     def on_closing(self):
         """애플리케이션 종료 시 리스너를 중지합니다."""
