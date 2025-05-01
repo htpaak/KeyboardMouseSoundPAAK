@@ -133,6 +133,10 @@ class MainWindow(QMainWindow):
         self.init_ui()
         self.connect_signals()
 
+        # --- 스타일시트 적용 --- #
+        self.apply_stylesheet()
+        # -----------------------
+
     def init_ui(self):
         """UI 요소들을 초기화하고 배치합니다."""
         self.setWindowTitle("🎧 Sound Input Fun! 🖱️")
@@ -153,19 +157,24 @@ class MainWindow(QMainWindow):
         keyboard_layout.setAlignment(Qt.AlignTop) # 위쪽 정렬
         splitter.addWidget(keyboard_frame)
 
-        k_title = QLabel("Keyboard Sounds ⌨️")
-        k_title.setStyleSheet("font-size: 12pt; font-weight: bold;") # 스타일 설정
-        keyboard_layout.addWidget(k_title)
+        # k_title을 인스턴스 변수로 변경
+        self.k_title = QLabel("Keyboard Sounds ⌨️")
+        self.k_title.setStyleSheet("font-size: 12pt; font-weight: bold;") # 스타일 설정
+        self.k_title.setObjectName("TitleLabel") # ObjectName 설정 위치 이동
+        keyboard_layout.addWidget(self.k_title)
 
         # Sound Pack 선택
         k_sound_layout = QHBoxLayout()
-        k_sound_layout.addWidget(QLabel("Sound Pack:"))
+        k_sound_label = QLabel("Sound Pack:")
+        k_sound_layout.addWidget(k_sound_label)
+        k_sound_layout.addSpacing(5) # 레이블과 콤보박스 사이 간격 추가
         self.keyboard_sound_combobox = QComboBox()
         self.keyboard_sound_combobox.addItems(self.keyboard_sound_options)
         if self.keyboard_sound_options and self.keyboard_sound_options[0] != "None":
              self.keyboard_selected_pack = self.keyboard_sound_options[0]
         k_sound_layout.addWidget(self.keyboard_sound_combobox)
         keyboard_layout.addLayout(k_sound_layout)
+        keyboard_layout.addSpacing(15) # 사운드 팩 아래 간격 증가 (10 -> 15)
 
         # Volume 조절
         k_volume_layout = QHBoxLayout()
@@ -177,15 +186,19 @@ class MainWindow(QMainWindow):
         self.keyboard_volume_label = QLabel(f"{self.keyboard_volume:3d}%")
         k_volume_layout.addWidget(self.keyboard_volume_label)
         keyboard_layout.addLayout(k_volume_layout)
+        keyboard_layout.addSpacing(25) # 볼륨 조절 아래 간격 증가
 
         # 시작/종료 버튼
         k_button_layout = QHBoxLayout()
         self.keyboard_start_button = QPushButton("Start")
+        self.keyboard_start_button.setObjectName("StartButton") # ObjectName 설정 위치 이동
         self.keyboard_stop_button = QPushButton("Stop")
+        self.keyboard_stop_button.setObjectName("StopButton") # ObjectName 설정 위치 이동
         self.keyboard_stop_button.setEnabled(False)
         k_button_layout.addWidget(self.keyboard_start_button)
         k_button_layout.addWidget(self.keyboard_stop_button)
         keyboard_layout.addLayout(k_button_layout)
+        keyboard_layout.addStretch(1) # 버튼 아래 Stretch 다시 추가
 
         # --- 마우스 섹션 (오른쪽) ---
         mouse_frame = QFrame()
@@ -193,19 +206,24 @@ class MainWindow(QMainWindow):
         mouse_layout.setAlignment(Qt.AlignTop)
         splitter.addWidget(mouse_frame)
 
-        m_title = QLabel("Mouse Sounds 🖱️")
-        m_title.setStyleSheet("font-size: 12pt; font-weight: bold;")
-        mouse_layout.addWidget(m_title)
+        # m_title을 인스턴스 변수로 변경
+        self.m_title = QLabel("Mouse Sounds 🖱️")
+        self.m_title.setStyleSheet("font-size: 12pt; font-weight: bold;")
+        self.m_title.setObjectName("TitleLabel") # ObjectName 설정 위치 이동
+        mouse_layout.addWidget(self.m_title)
 
         # Click Sound 선택
         m_sound_layout = QHBoxLayout()
-        m_sound_layout.addWidget(QLabel("Click Sound:"))
+        m_sound_label = QLabel("Click Sound:")
+        m_sound_layout.addWidget(m_sound_label)
+        m_sound_layout.addSpacing(5) # 레이블과 콤보박스 사이 간격 추가
         self.mouse_sound_combobox = QComboBox()
         self.mouse_sound_combobox.addItems(self.mouse_sound_options)
         if self.mouse_sound_options and self.mouse_sound_options[0] != "None":
             self.mouse_selected_sound = self.mouse_sound_options[0]
         m_sound_layout.addWidget(self.mouse_sound_combobox)
         mouse_layout.addLayout(m_sound_layout)
+        mouse_layout.addSpacing(15) # 클릭 사운드 아래 간격 증가 (10 -> 15)
 
         # Volume 조절
         m_volume_layout = QHBoxLayout()
@@ -217,18 +235,177 @@ class MainWindow(QMainWindow):
         self.mouse_volume_label = QLabel(f"{self.mouse_volume:3d}%")
         m_volume_layout.addWidget(self.mouse_volume_label)
         mouse_layout.addLayout(m_volume_layout)
+        mouse_layout.addSpacing(25) # 볼륨 조절 아래 간격 증가
 
         # 시작/종료 버튼
         m_button_layout = QHBoxLayout()
         self.mouse_start_button = QPushButton("Start")
+        self.mouse_start_button.setObjectName("StartButton") # ObjectName 설정 위치 이동
         self.mouse_stop_button = QPushButton("Stop")
+        self.mouse_stop_button.setObjectName("StopButton") # ObjectName 설정 위치 이동
         self.mouse_stop_button.setEnabled(False)
         m_button_layout.addWidget(self.mouse_start_button)
         m_button_layout.addWidget(self.mouse_stop_button)
         mouse_layout.addLayout(m_button_layout)
+        mouse_layout.addStretch(1) # 버튼 아래 Stretch 다시 추가
 
         # 스플리터 초기 크기 설정 (비율 조절)
         splitter.setSizes([250, 250])
+
+    def apply_stylesheet(self):
+        """애플리케이션에 커스텀 스타일시트를 적용합니다."""
+        qss = """
+            QMainWindow {
+                background-color: #f8f9fa; /* 밝은 배경색 */
+            }
+            QFrame {
+                background-color: #ffffff; /* 프레임 배경 흰색 */
+                border-radius: 8px;      /* 둥근 모서리 */
+                border: 1px solid #e9ecef; /* 연한 테두리 */
+            }
+            QLabel {
+                font-size: 10pt;         /* 기본 폰트 크기 */
+                color: #495057;         /* 약간 어두운 텍스트 색상 */
+            }
+            QLabel#TitleLabel {
+                font-size: 12pt;
+                font-weight: bold;
+                color: #343a40;
+                padding-bottom: 5px;    /* 제목 아래 약간의 여백 */
+            }
+            QPushButton {
+                background-color: #e7f5ff; /* 연한 하늘색 배경 */
+                color: #1c7ed6;         /* 파란색 텍스트 */
+                border: 1px solid #a5d8ff;
+                padding: 6px 12px;
+                border-radius: 4px;      /* 약간 둥근 모서리 */
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #d0ebff;
+                border-color: #74c0fc;
+            }
+            QPushButton:pressed {
+                background-color: #a5d8ff;
+            }
+            QPushButton:disabled {
+                background-color: #f1f3f5;
+                color: #adb5bd;
+                border-color: #dee2e6;
+            }
+            /* 시작/종료 버튼 색상 차별화 (객체 이름 사용) */
+            QPushButton#StartButton {
+                 background-color: #e6fcf5; /* 연한 민트 */
+                 color: #087f5b;
+                 border-color: #96f2d7;
+            }
+            QPushButton#StartButton:hover {
+                 background-color: #c3fae8;
+                 border-color: #63e6be;
+            }
+            QPushButton#StartButton:pressed {
+                 background-color: #96f2d7;
+            }
+             QPushButton#StopButton {
+                 background-color: #fff0f6; /* 연한 핑크 */
+                 color: #c2255c;
+                 border-color: #fcc2d7;
+            }
+            QPushButton#StopButton:hover {
+                 background-color: #ffe0e6;
+                 border-color: #faa2c1;
+            }
+            QPushButton#StopButton:pressed {
+                 background-color: #fcc2d7;
+            }
+            QComboBox {
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                padding: 5px;
+                background-color: white;
+                min-height: 20px; /* 최소 높이 설정 */
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 15px;
+                border-left-width: 1px;
+                border-left-color: #ced4da;
+                border-left-style: solid;
+                border-top-right-radius: 3px;
+                border-bottom-right-radius: 3px;
+            }
+            /* QComboBox::down-arrow 스타일 제거 (아이콘 파일 부재 시 문제 발생 가능) */
+            /*
+            QComboBox::down-arrow {
+                 image: url(assets/down_arrow.png);
+                 width: 10px;
+                 height: 10px;
+            }
+            */
+             QComboBox:disabled {
+                background-color: #f1f3f5;
+                color: #adb5bd;
+                border-color: #dee2e6;
+            }
+            QSlider::groove:horizontal {
+                border: 1px solid #e9ecef;
+                height: 4px; /* Groove 높이 */
+                background: #e9ecef;
+                margin: 2px 0;
+                border-radius: 2px;
+            }
+            QSlider::handle:horizontal {
+                background: #ffc0cb; /* 슬라이더 핸들 핑크색 */
+                border: 1px solid #f783ac;
+                width: 14px; /* 핸들 너비 */
+                margin: -5px 0; /* Groove 중앙에 오도록 조정 */
+                border-radius: 7px; /* 원형 핸들 */
+            }
+             QSlider:disabled {
+                /* 비활성화 시 슬라이더 스타일 변경 필요 시 추가 */
+                background: #f1f3f5; /* Groove 배경만 변경 예시 */
+            }
+            QSplitter::handle:horizontal {
+                background-color: #dee2e6; /* 스플리터 핸들 색상 */
+                width: 1px;
+                margin: 2px 0;
+            }
+        """
+        self.setStyleSheet(qss)
+
+        # 위젯에 ObjectName 설정 (init_ui로 이동됨)
+        # self.k_title.setObjectName("TitleLabel")
+        # self.m_title.setObjectName("TitleLabel")
+        # self.keyboard_start_button.setObjectName("StartButton")
+        # self.keyboard_stop_button.setObjectName("StopButton")
+        # self.mouse_start_button.setObjectName("StartButton")
+        # self.mouse_stop_button.setObjectName("StopButton")
+
+    # --- 창 중앙 정렬 메서드 --- #
+    def center_window(self):
+        """애플리케이션 창을 화면 중앙으로 이동시킵니다."""
+        try:
+            # 창의 현재 지오메트리 정보 가져오기
+            qr = self.frameGeometry()
+            # 사용 가능한 화면의 중앙 지점 가져오기 (QDesktopWidget 사용)
+            cp = QApplication.desktop().availableGeometry().center()
+            # 창의 중앙 지점을 화면의 중앙 지점으로 이동
+            qr.moveCenter(cp)
+            self.move(qr.topLeft())
+        except Exception as e:
+            print(f"Warning: Could not center window: {e}")
+    # --------------------------
+
+    # --- showEvent 재정의 --- #
+    def showEvent(self, event):
+        """창이 처음 표시될 때 중앙 정렬을 수행합니다."""
+        super().showEvent(event) # 부모 클래스의 showEvent 호출
+        # 한 번만 실행되도록 플래그 사용 (선택적)
+        if not hasattr(self, '_centered') or not self._centered:
+            self.center_window()
+            self._centered = True # 실행 플래그 설정
+    # ------------------------
 
     def connect_signals(self):
         """위젯의 시그널을 슬롯(메서드)에 연결합니다."""
@@ -396,7 +573,7 @@ class MainWindow(QMainWindow):
             # self.mouse_listener_thread.wait()
             self.mouse_listener_thread = None
 
-        self.mouse_listener = None
+            self.mouse_listener = None
         self.mouse_is_running = False
         print("Mouse listening stopped.")
         self.update_mouse_button_signal.emit(self.mouse_is_running)

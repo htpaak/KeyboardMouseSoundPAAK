@@ -5,6 +5,7 @@ from log_setup import setup_logging
 # import tkinter as tk # Tkinter 제거
 from PyQt5.QtWidgets import QApplication # PyQt5 임포트
 from PyQt5.QtGui import QIcon # PyQt5 임포트
+from PyQt5.QtCore import Qt # Qt 임포트 추가
 # from main_gui import KeyboardSoundApp # Tkinter GUI 제거 (추후 PyQt5 GUI 임포트)
 
 setup_logging() # 항상 호출 (내부에서 조건 확인)
@@ -14,6 +15,11 @@ PRODUCT_NAME = "KeyboardSoundApp"
 APP_VERSION = "1.0.0" # 버전 정의 (필요시)
 MYAPPID = f"{COMPANY_NAME}.{PRODUCT_NAME}.{APP_VERSION}" # AppUserModelID 정의
 ICON_PATH = os.path.abspath(os.path.join("assets", "icon.ico")) # 아이콘 경로 정의
+
+# --- DPI 스케일링 활성화 (QApplication 생성 전) ---
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+print("High DPI Scaling Enabled.") # 확인 로그
+# -------------------------------------------------
 
 # --- AppUserModelID 설정 (QApplication 생성 전) ---
 try:
@@ -42,6 +48,7 @@ if __name__ == "__main__":
         from main_gui import MainWindow # PyQt5 MainWindow 임포트
         window = MainWindow()
         window.show()
+        # window.center_window() # 창 표시 후 중앙 정렬 호출 (main_gui.py의 showEvent로 이동)
         # # 임시 코드 제거
         # from PyQt5.QtWidgets import QLabel
         # window = QLabel("main_gui.py migration in progress...")
