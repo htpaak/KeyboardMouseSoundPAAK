@@ -7,6 +7,7 @@ import os
 from keyboard_listener import KeyboardListener
 from sound_player import SoundPlayer
 from pynput import keyboard
+from mouse_listener import MouseListener
 
 # --- 키-행(Row) 매핑 (kbsim-master KLE 분석 기반) ---
 # 표준 QWERTY 레이아웃 및 kbsim 프리셋 기준
@@ -70,10 +71,122 @@ SPECIAL_KEY_MAP = {
 class KeyboardSoundApp:
     def __init__(self, master):
         self.master = master
-        master.title("Keyboard Sound Selector")
+        master.title("Sound Input Simulator") # 제목 변경
         master.resizable(False, False) # 창 크기 조절 비활성화
 
-        # --- 창 중앙 정렬 추가 --- #
+        # --- 창 크기 계산 로직 (나중에 배치 후 다시 계산 필요) --- #
+        # master.update_idletasks()
+        # window_width = master.winfo_width()
+        # window_height = master.winfo_height()
+        # screen_width = master.winfo_screenwidth()
+        # screen_height = master.winfo_screenheight()
+        # center_x = int(screen_width/2 - window_width/2)
+        # center_y = int(screen_height/2 - window_height/2)
+        # master.geometry(f'+{center_x}+{center_y}')
+        # ------------------------- #
+
+        # --- 인스턴스 변수 초기화 --- #
+        # 공통
+        self.sound_player = SoundPlayer()
+        # self.sound_options = self._find_available_sound_packs() # 아래에서 분리됨
+
+        # 키보드용
+        self.keyboard_listener = None
+        self.keyboard_is_running = False
+        self.keyboard_selected_sound_type = None
+        self.keyboard_volume = 100
+        self.keyboard_sound_var = tk.StringVar(master)
+        self.keyboard_sound_options = self._find_available_keyboard_packs() # 메서드명 변경
+
+        # 마우스용 (기능은 추후 구현)
+        self.mouse_listener = None # 마우스 리스너 인스턴스 변수 추가
+        self.mouse_is_running = False
+        self.mouse_selected_sound_file = None # 파일 이름 저장용
+        self.mouse_volume = 100
+        self.mouse_sound_var = tk.StringVar(master)
+        self.mouse_sound_options = self._find_available_mouse_sounds() # 새 메서드 호출
+        # --------------------------- #
+
+        # --- GUI 위젯 생성 --- #
+        # 부모 프레임 (좌우 분할용)
+        parent_frame = ttk.Frame(master, padding="10")
+        parent_frame.pack(expand=True, fill=tk.BOTH)
+
+        # --- 키보드 영역 (왼쪽) --- #
+        keyboard_section_frame = ttk.LabelFrame(parent_frame, text="Keyboard", padding="10")
+        keyboard_section_frame.pack(side=tk.LEFT, padx=(0, 5), fill=tk.BOTH, expand=True)
+
+        # 키보드: 사운드 선택
+        k_sound_frame = ttk.LabelFrame(keyboard_section_frame, text="Sound Options", padding="5") # 패딩 줄임
+        k_sound_frame.pack(fill=tk.X, pady=(0,5))
+
+        k_sound_label = ttk.Label(k_sound_frame, text="Select Sound Pack:")
+        k_sound_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        k_default_sound = self.keyboard_sound_options[0] if self.keyboard_sound_options and self.keyboard_sound_options[0] not in ["None", "Error"] else "None"
+        self.keyboard_sound_var.set(k_default_sound)
+        self.keyboard_sound_combobox = ttk.Combobox(k_sound_frame, textvariable=self.keyboard_sound_var, values=self.keyboard_sound_options, state="readonly", width=10)
+        self.keyboard_sound_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        # 키보드: 볼륨 조절
+        k_volume_frame = ttk.LabelFrame(keyboard_section_frame, text="Volume Control", padding="5") # 패딩 줄임
+        k_volume_frame.pack(fill=tk.X, pady=5)
+
+        self.keyboard_volume_scale = ttk.Scale(k_volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self._update_keyboard_volume) # 콜백 함수명 변경
+        self.keyboard_volume_scale.set(self.keyboard_volume)
+        self.keyboard_volume_scale.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
+
+        self.keyboard_volume_label = ttk.Label(k_volume_frame, text=f"{self.keyboard_volume}%")
+        self.keyboard_volume_label.pack(side=tk.LEFT)
+
+        # 키보드: 시작/종료 버튼
+        k_button_frame = ttk.Frame(keyboard_section_frame, padding="5")
+        k_button_frame.pack(fill=tk.X)
+
+        self.keyboard_start_button = ttk.Button(k_button_frame, text="Start", command=self.start_keyboard_sound, width=10) # 커맨드 함수명 변경
+        self.keyboard_start_button.pack(side=tk.LEFT, expand=True, padx=2)
+
+        self.keyboard_stop_button = ttk.Button(k_button_frame, text="Stop", command=self.stop_keyboard_sound, state=tk.DISABLED, width=10) # 커맨드 함수명 변경
+        self.keyboard_stop_button.pack(side=tk.LEFT, expand=True, padx=2)
+
+        # --- 마우스 영역 (오른쪽) --- #
+        mouse_section_frame = ttk.LabelFrame(parent_frame, text="Mouse", padding="10")
+        mouse_section_frame.pack(side=tk.RIGHT, padx=(5, 0), fill=tk.BOTH, expand=True)
+
+        # 마우스: 사운드 선택
+        m_sound_frame = ttk.LabelFrame(mouse_section_frame, text="Click Sound", padding="5") # 레이블 변경
+        m_sound_frame.pack(fill=tk.X, pady=(0,5))
+
+        m_sound_label = ttk.Label(m_sound_frame, text="Select Click Sound:") # 레이블 변경
+        m_sound_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        m_default_sound = self.mouse_sound_options[0] if self.mouse_sound_options and self.mouse_sound_options[0] not in ["None", "Error"] else "None"
+        self.mouse_sound_var.set(m_default_sound)
+        self.mouse_sound_combobox = ttk.Combobox(m_sound_frame, textvariable=self.mouse_sound_var, values=self.mouse_sound_options, state="readonly", width=10)
+        self.mouse_sound_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        # 마우스: 볼륨 조절
+        m_volume_frame = ttk.LabelFrame(mouse_section_frame, text="Volume Control", padding="5")
+        m_volume_frame.pack(fill=tk.X, pady=5)
+
+        self.mouse_volume_scale = ttk.Scale(m_volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self._update_mouse_volume) # 콜백 함수명 변경 (추후 구현)
+        self.mouse_volume_scale.set(self.mouse_volume)
+        self.mouse_volume_scale.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
+
+        self.mouse_volume_label = ttk.Label(m_volume_frame, text=f"{self.mouse_volume}%")
+        self.mouse_volume_label.pack(side=tk.LEFT)
+
+        # 마우스: 시작/종료 버튼
+        m_button_frame = ttk.Frame(mouse_section_frame, padding="5")
+        m_button_frame.pack(fill=tk.X)
+
+        self.mouse_start_button = ttk.Button(m_button_frame, text="Start", command=self.start_mouse_sound, width=10) # 커맨드 함수명 변경 (추후 구현)
+        self.mouse_start_button.pack(side=tk.LEFT, expand=True, padx=2)
+
+        self.mouse_stop_button = ttk.Button(m_button_frame, text="Stop", command=self.stop_mouse_sound, state=tk.DISABLED, width=10) # 커맨드 함수명 변경 (추후 구현)
+        self.mouse_stop_button.pack(side=tk.LEFT, expand=True, padx=2)
+
+        # --- 창 중앙 정렬 (위젯 배치 후 다시 실행) --- #
         master.update_idletasks() # GUI 업데이트 강제하여 정확한 창 크기 얻기
         window_width = master.winfo_width()
         window_height = master.winfo_height()
@@ -81,105 +194,251 @@ class KeyboardSoundApp:
         screen_height = master.winfo_screenheight()
         center_x = int(screen_width/2 - window_width/2)
         center_y = int(screen_height/2 - window_height/2)
-        master.geometry(f'+{center_x}+{center_y}') # 창 위치 설정
-        # ------------------------- #
-
-        # 인스턴스 변수 초기화
-        self.sound_player = SoundPlayer()
-        self.keyboard_listener = None
-        self.is_running = False
-        self.selected_sound_type = None # 선택된 사운드 타입 (폴더명)
-        self.volume = 100 # 볼륨 초기값 저장 (100으로 변경)
-
-        # --- GUI 위젯 생성 --- #
-        # 메인 프레임
-        main_frame = ttk.Frame(master, padding="10")
-        main_frame.pack(expand=True, fill=tk.BOTH)
-
-        # 사운드 선택
-        sound_frame = ttk.LabelFrame(main_frame, text="Sound Options", padding="10")
-        sound_frame.pack(fill=tk.X, pady=5)
-
-        sound_label = ttk.Label(sound_frame, text="Select Sound Pack:")
-        sound_label.pack(side=tk.LEFT, padx=(0, 5))
-
-        self.sound_options = self._find_available_sound_packs() # 사용 가능한 사운드 팩 (폴더) 찾기
-        if not self.sound_options or self.sound_options == ["Error"]:
-            if self.sound_options != ["Error"]: # 에러 메시지가 이미 표시되지 않았다면
-                messagebox.showwarning("No Sound Packs",
-                                       f"No sound pack folders found in '{self.sound_player.base_sound_folder}'.\n" +
-                                       "Please create folders like 'Typewriter' inside it.")
-            self.sound_options = ["None"] # 폴더가 없을 경우 기본 옵션
-
-        self.sound_var = tk.StringVar(master)
-        # 사용 가능한 첫 번째 사운드 팩을 기본값으로 설정 (None 이나 Error가 아닐 경우)
-        default_sound = self.sound_options[0] if self.sound_options and self.sound_options[0] not in ["None", "Error"] else "None"
-        self.sound_var.set(default_sound)
-        self.sound_combobox = ttk.Combobox(sound_frame, textvariable=self.sound_var, values=self.sound_options, state="readonly", width=10)
-        self.sound_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X)
-
-        # 볼륨 조절
-        volume_frame = ttk.LabelFrame(main_frame, text="Volume Control", padding="10")
-        volume_frame.pack(fill=tk.X, pady=5)
-
-        self.volume_scale = ttk.Scale(volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self._update_volume)
-        self.volume_scale.set(self.volume) # 초기값 설정 (변경된 self.volume 사용)
-        self.volume_scale.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
-
-        self.volume_label = ttk.Label(volume_frame, text=f"{self.volume}%") # 초기 볼륨 표시 (변경된 self.volume 사용)
-        self.volume_label.pack(side=tk.LEFT)
-
-        # 시작/종료 버튼
-        button_frame = ttk.Frame(main_frame, padding="5")
-        button_frame.pack(fill=tk.X)
-
-        self.start_button = ttk.Button(button_frame, text="Start", command=self.start_sound, width=10)
-        self.start_button.pack(side=tk.LEFT, expand=True, padx=2)
-
-        self.stop_button = ttk.Button(button_frame, text="Stop", command=self.stop_sound, state=tk.DISABLED, width=10)
-        self.stop_button.pack(side=tk.LEFT, expand=True, padx=2)
+        master.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}') # 크기와 위치 함께 설정
+        # ----------------------------------------- #
 
         # 애플리케이션 종료 시 자원 해제 처리
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def _update_volume(self, value):
-        """볼륨 스케일 변경 시 호출되어 볼륨 값 업데이트 및 라벨 변경"""
-        self.volume = int(float(value))
-        # self.volume_label 이 초기화되었는지 확인 후 업데이트 (AttributeError 방지)
-        if hasattr(self, 'volume_label') and self.volume_label:
-            self.volume_label.config(text=f"{self.volume}%")
-        # 실행 중일 때 실시간으로 볼륨 반영 (선택적)
-        # if self.is_running and self.sound_player:
-        #     # 여기서는 재생 시점에 볼륨을 적용하므로 즉시 반영 코드는 생략
-        #     pass
+    # --- 콜백 함수 정의 --- #
+    def _update_keyboard_volume(self, value):
+        """키보드 볼륨 스케일 변경 시 호출됨"""
+        self.keyboard_volume = int(float(value))
+        if hasattr(self, 'keyboard_volume_label') and self.keyboard_volume_label:
+            self.keyboard_volume_label.config(text=f"{self.keyboard_volume}%")
 
-    def _find_available_sound_packs(self):
-        """지정된 기본 사운드 폴더에서 사용 가능한 사운드 팩(폴더) 목록을 반환합니다."""
-        base_dir = self.sound_player.base_sound_folder
-        if not os.path.exists(base_dir):
-            try:
-                os.makedirs(base_dir)
-                print(f"Created directory: {base_dir}")
-                return [] # 폴더가 없었으므로 빈 리스트 반환
-            except OSError as e:
-                messagebox.showerror("Error", f"Could not create directory {base_dir}: {e}")
-                return ["Error"] # 에러 발생 시
+    def _update_mouse_volume(self, value):
+        """마우스 볼륨 스케일 변경 시 호출됨 (추후 구현)"""
+        self.mouse_volume = int(float(value))
+        if hasattr(self, 'mouse_volume_label') and self.mouse_volume_label:
+            self.mouse_volume_label.config(text=f"{self.mouse_volume}%")
+        # TODO: 마우스 볼륨 로직 구현
+        pass
+
+    # --- 사운드 파일/팩 검색 --- #
+    def _find_available_keyboard_packs(self):
+        """키보드 사운드 팩(폴더) 목록을 반환합니다."""
+        base_dir = os.path.join("src", "keyboard") # 경로 확인
+        # 디렉토리 생성 로직은 SoundPlayer.load_sound_pack 에서 처리될 수 있으므로 여기선 생략 가능
+        if not os.path.isdir(base_dir):
+            messagebox.showwarning("Directory Not Found", f"Keyboard sound directory not found: {base_dir}")
+            return ["None"]
 
         available_packs = []
         try:
             for item in os.listdir(base_dir):
                 item_path = os.path.join(base_dir, item)
-                # 폴더이고, 내부에 press나 release 폴더 중 하나라도 있는지 확인 (더 엄격한 검사)
+                # 폴더이고, 내부에 press나 release 폴더 중 하나라도 있는지 확인
                 if os.path.isdir(item_path) and \
                    (os.path.isdir(os.path.join(item_path, "press")) or \
                     os.path.isdir(os.path.join(item_path, "release"))):
                     available_packs.append(item)
         except Exception as e:
-            messagebox.showerror("Error", f"Error reading sound pack directory '{base_dir}': {e}")
+            messagebox.showerror("Error", f"Error reading keyboard sound pack directory '{base_dir}': {e}")
             return ["Error"]
 
-        return sorted(available_packs) if available_packs else []
+        return sorted(available_packs) if available_packs else ["None"]
 
+    def _find_available_mouse_sounds(self):
+        """마우스 클릭 사운드 파일 목록 (확장자 제외)을 반환합니다."""
+        base_dir = os.path.join("src", "mouse") # 마우스 사운드 경로
+        if not os.path.exists(base_dir):
+            try:
+                os.makedirs(base_dir)
+                print(f"Created directory: {base_dir}")
+                return ["None"] # 디렉토리 없었으면 None 반환
+            except OSError as e:
+                messagebox.showerror("Error", f"Could not create directory {base_dir}: {e}")
+                return ["Error"]
+
+        available_sounds = []
+        try:
+            for filename in os.listdir(base_dir):
+                if filename.lower().endswith(('.wav', '.mp3')):
+                    sound_name = os.path.splitext(filename)[0]
+                    available_sounds.append(sound_name)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error reading mouse sound directory '{base_dir}': {e}")
+            return ["Error"]
+
+        return sorted(available_sounds) if available_sounds else ["None"]
+
+    # --- 키보드 이벤트 핸들러 --- #
+    def _handle_key_press(self, key):
+        """키 눌림 이벤트 처리: kbsim 규칙에 따라 press 사운드 재생"""
+        if self.keyboard_is_running and self.sound_player: # 변수명 변경
+            key_name = self._key_to_filename(key)
+            # print(f"[DEBUG] Handle Press: Original Key = {key}, Mapped Name = {key_name}") # 로그 줄임
+
+            if key_name:
+                # KEY_ROW_MAP에서 행 정보 찾기
+                row_index = KEY_ROW_MAP.get(key_name, None)
+
+                # kbsim 규칙: 행 5 이상은 행 4(GENERIC_R4)로 취급
+                # 또는 매핑되지 않은 키도 기본값(행 4) 사용
+                effective_row = 4 if row_index is None or row_index > 4 else row_index
+
+                self.sound_player.play_key_sound(
+                    self.keyboard_selected_sound_type, # 변수명 변경
+                    "press",
+                    key_name,
+                    self.keyboard_volume, # 변수명 변경
+                    row_index=effective_row
+                )
+
+    def _handle_key_release(self, key):
+        """키 뗌 이벤트 처리: kbsim 규칙에 따라 release 사운드 재생"""
+        if self.keyboard_is_running and self.sound_player: # 변수명 변경
+            key_name = self._key_to_filename(key)
+            # print(f"[DEBUG] Handle Release: Original Key = {key}, Mapped Name = {key_name}") # 로그 줄임
+
+            if key_name:
+                self.sound_player.play_key_sound(
+                    self.keyboard_selected_sound_type, # 변수명 변경
+                    "release",
+                    key_name,
+                    self.keyboard_volume # 변수명 변경
+                )
+
+    # --- 마우스 이벤트 핸들러 --- #
+    def _handle_mouse_click(self, x, y, button, pressed):
+        """마우스 클릭 시 호출될 콜백 함수"""
+        if self.mouse_is_running and pressed: # 클릭 누를 때만
+            # print(f"Mouse clicked: {button}") # 디버깅 로그
+            if self.mouse_selected_sound_file and self.sound_player:
+                self.sound_player.play_mouse_click_sound(
+                    self.mouse_selected_sound_file,
+                    self.mouse_volume
+                )
+    # def _handle_mouse_scroll(self, x, y, dx, dy): # 스크롤은 아직 미구현
+    #     pass
+
+    # --- 시작/종료 로직 --- #
+    def start_keyboard_sound(self):
+        """키보드 사운드 재생 및 리스닝 시작"""
+        if self.keyboard_is_running: # 변수명 변경
+            return
+
+        self.keyboard_selected_sound_type = self.keyboard_sound_var.get() # 변수명 변경
+        if self.keyboard_selected_sound_type == "None" or self.keyboard_selected_sound_type == "Error":
+             messagebox.showerror("Error", "Please select a valid sound pack for the keyboard.")
+             return
+
+        # 선택된 사운드 팩 미리 로드
+        if not self.sound_player.load_sound_pack(self.keyboard_selected_sound_type):
+            messagebox.showerror("Error", f"Failed to load sound pack '{self.keyboard_selected_sound_type}'. Check logs for details.")
+            return
+
+        # 키보드 리스너 시작
+        try:
+            self.keyboard_listener = KeyboardListener(
+                on_press_callback=self._handle_key_press,
+                on_release_callback=self._handle_key_release
+            )
+            self.keyboard_listener.start_listening()
+            self.keyboard_is_running = True # 변수명 변경
+            print(f"Keyboard listening started with sound pack: '{self.keyboard_selected_sound_type}', Volume: {self.keyboard_volume}%")
+
+            # GUI 상태 업데이트
+            self._update_gui_state() # GUI 상태 업데이트 함수 호출
+
+        except Exception as e:
+             messagebox.showerror("Error", f"Failed to start keyboard listener: {e}")
+             if self.keyboard_listener:
+                 self.keyboard_listener = None
+             self.keyboard_is_running = False # 변수명 변경
+             self._update_gui_state() # GUI 상태 업데이트 함수 호출
+
+    def stop_keyboard_sound(self):
+        """키보드 리스닝 중지"""
+        if not self.keyboard_is_running: # 변수명 변경
+            return
+
+        if self.keyboard_listener:
+            self.keyboard_listener.stop_listening()
+            self.keyboard_listener = None
+
+        self.keyboard_is_running = False # 변수명 변경
+        print("Keyboard listening stopped.")
+
+        # GUI 상태 업데이트
+        self._update_gui_state()
+
+    def start_mouse_sound(self):
+        """마우스 사운드 재생 및 리스닝 시작"""
+        if self.mouse_is_running:
+            return
+
+        self.mouse_selected_sound_file = self.mouse_sound_var.get()
+        if self.mouse_selected_sound_file == "None" or self.mouse_selected_sound_file == "Error":
+            messagebox.showerror("Error", "Please select a valid click sound for the mouse.")
+            return
+
+        # 선택된 마우스 사운드 로드 시도
+        if not self.sound_player.load_mouse_sound(self.mouse_selected_sound_file):
+            messagebox.showerror("Error", f"Failed to load mouse sound '{self.mouse_selected_sound_file}'. Check logs.")
+            return
+
+        # 마우스 리스너 시작
+        try:
+            self.mouse_listener = MouseListener(on_click_callback=self._handle_mouse_click)
+            self.mouse_listener.start_listening()
+            self.mouse_is_running = True
+            print(f"Mouse listening started with sound: '{self.mouse_selected_sound_file}', Volume: {self.mouse_volume}%")
+            self._update_gui_state()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to start mouse listener: {e}")
+            if self.mouse_listener:
+                self.mouse_listener = None
+            self.mouse_is_running = False
+            self._update_gui_state()
+
+    def stop_mouse_sound(self):
+        """마우스 리스닝 중지"""
+        if not self.mouse_is_running:
+            return
+
+        if self.mouse_listener:
+            self.mouse_listener.stop_listening()
+            self.mouse_listener = None
+
+        self.mouse_is_running = False
+        print("Mouse listening stopped.")
+        self._update_gui_state()
+
+    # --- GUI 상태 업데이트 --- #
+    def _update_gui_state(self):
+        """현재 실행 상태에 따라 GUI 위젯 상태 업데이트"""
+        # Keyboard Controls
+        k_state = tk.DISABLED if self.keyboard_is_running else tk.NORMAL
+        k_combo_state = tk.DISABLED if self.keyboard_is_running else ("readonly" if self.keyboard_sound_options and self.keyboard_sound_options != ["None"] and self.keyboard_sound_options != ["Error"] else tk.DISABLED)
+
+        self.keyboard_start_button.config(state=k_state)
+        self.keyboard_stop_button.config(state=tk.NORMAL if self.keyboard_is_running else tk.DISABLED)
+        self.keyboard_sound_combobox.config(state=k_combo_state)
+        self.keyboard_volume_scale.config(state=k_state)
+
+        # Mouse Controls
+        m_state = tk.DISABLED if self.mouse_is_running else tk.NORMAL
+        m_combo_state = tk.DISABLED if self.mouse_is_running else ("readonly" if self.mouse_sound_options and self.mouse_sound_options != ["None"] and self.mouse_sound_options != ["Error"] else tk.DISABLED)
+
+        self.mouse_start_button.config(state=m_state)
+        self.mouse_stop_button.config(state=tk.NORMAL if self.mouse_is_running else tk.DISABLED)
+        self.mouse_sound_combobox.config(state=m_combo_state)
+        self.mouse_volume_scale.config(state=m_state)
+
+    # --- 애플리케이션 종료 --- #
+    def on_closing(self):
+        """애플리케이션 창 종료 시 호출될 함수"""
+        if self.keyboard_is_running:
+            self.stop_keyboard_sound()
+        if self.mouse_is_running: # 마우스 리스너 중지 추가
+            self.stop_mouse_sound()
+        if self.sound_player:
+            self.sound_player.unload()
+        self.master.destroy()
+
+    # --- 키보드 키 이름 변환 --- #
     def _key_to_filename(self, key):
         """pynput 키 객체를 KEY_ROW_MAP에서 사용할 키 이름 문자열(대문자)로 변환합니다.
            로직 순서 변경: SPECIAL_KEY_MAP -> Numpad vk -> char -> 기타 vk
@@ -268,138 +527,6 @@ class KeyboardSoundApp:
         # 최종적으로 매핑되지 않은 키 (vk도 없고 char도 없는 특수키 등)
         # print(f"Unmapped key: {key} (vk={getattr(key, 'vk', None)}, char={getattr(key, 'char', None)})")
         return None
-
-    def _handle_key_press(self, key):
-        """키 눌림 이벤트 처리: kbsim 규칙에 따라 press 사운드 재생"""
-        if self.is_running and self.sound_player:
-            key_name = self._key_to_filename(key)
-            print(f"[DEBUG] Handle Press: Original Key = {key}, Mapped Name = {key_name}") # 로그 추가
-
-            if key_name:
-                # KEY_ROW_MAP에서 행 정보 찾기
-                row_index = KEY_ROW_MAP.get(key_name, None)
-
-                # kbsim 규칙: 행 5 이상은 행 4(GENERIC_R4)로 취급
-                # 또는 매핑되지 않은 키도 기본값(행 4) 사용
-                effective_row = 4 if row_index is None or row_index > 4 else row_index
-
-                # print(f"Press Event: Key='{key_name}', Row={effective_row}") # 디버깅용
-
-                # 수정된 play_key_sound 호출 (행 정보 전달)
-                self.sound_player.play_key_sound(
-                    self.selected_sound_type,
-                    "press",
-                    key_name,
-                    self.volume,
-                    row_index=effective_row
-                )
-            # else: # 매핑 안 된 키는 소리 재생 안 함 (kbsim 동작과 유사하게)
-                # print(f"Press Event: Unmapped key {key}, no sound played.")
-                # pass
-
-    def _handle_key_release(self, key):
-        """키 뗌 이벤트 처리: kbsim 규칙에 따라 release 사운드 재생"""
-        if self.is_running and self.sound_player:
-            key_name = self._key_to_filename(key)
-            print(f"[DEBUG] Handle Release: Original Key = {key}, Mapped Name = {key_name}") # 로그 추가
-
-            if key_name:
-                # 수정된 play_key_sound 호출 (행 정보 필요 없음)
-                # _find_sound_file 내부에서 SPECIAL_RELEASE_KEYS 와 GENERIC fallback 처리
-                self.sound_player.play_key_sound(
-                    self.selected_sound_type,
-                    "release",
-                    key_name,
-                    self.volume
-                    # row_index는 전달 안 함
-                )
-            # else: # 매핑 안 된 키는 소리 재생 안 함
-                # print(f"Release Event: Unmapped key {key}, no sound played.")
-                # pass
-
-    def start_sound(self):
-        """사운드 재생 및 키보드 리스닝 시작"""
-        if self.is_running:
-            return
-
-        self.selected_sound_type = self.sound_var.get()
-        if self.selected_sound_type == "None" or self.selected_sound_type == "Error":
-             messagebox.showerror("Error", "Please select a valid sound pack from the list.")
-             return
-
-        # self.volume = self.volume_scale.get() # _update_volume에서 이미 self.volume 업데이트됨
-
-        # --- 선택된 사운드 팩 미리 로드 --- #
-        if not self.sound_player.load_sound_pack(self.selected_sound_type):
-            messagebox.showerror("Error", f"Failed to load sound pack '{self.selected_sound_type}'. Check logs for details.")
-            # GUI 상태 원래대로 복구 (선택 사항, 필요시 _update_gui_state 호출)
-            # self._update_gui_state() # stop 상태로 돌려놓기
-            return # 로딩 실패 시 리스너 시작 안 함
-        # ---------------------------------- #
-
-        # 키보드 리스너 시작
-        try:
-            # press와 release 콜백을 모두 전달
-            self.keyboard_listener = KeyboardListener(
-                on_press_callback=self._handle_key_press,
-                on_release_callback=self._handle_key_release
-            )
-            self.keyboard_listener.start_listening()
-            self.is_running = True
-            print(f"Started listening with sound pack: '{self.selected_sound_type}', Volume: {self.volume}%")
-
-            # GUI 상태 업데이트
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
-            self.sound_combobox.config(state=tk.DISABLED)
-            self.volume_scale.config(state=tk.DISABLED)
-
-        except Exception as e:
-             messagebox.showerror("Error", f"Failed to start keyboard listener: {e}")
-             if self.keyboard_listener:
-                 # 시도 중 오류 발생 시 stop 호출하면 안 됨 (listener 객체가 비정상일 수 있음)
-                 self.keyboard_listener = None # 참조만 제거
-             self.is_running = False
-             # GUI 원래 상태로 복구
-             self._update_gui_state()
-
-    def stop_sound(self):
-        """키보드 리스닝 중지"""
-        if not self.is_running:
-            return
-
-        if self.keyboard_listener:
-            self.keyboard_listener.stop_listening()
-            self.keyboard_listener = None
-
-        self.is_running = False
-        print("Stopped listening.")
-
-        # GUI 상태 업데이트
-        self._update_gui_state()
-
-    def _update_gui_state(self):
-        """현재 실행 상태(self.is_running)에 따라 GUI 위젯 상태 업데이트"""
-        if self.is_running:
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
-            self.sound_combobox.config(state=tk.DISABLED)
-            self.volume_scale.config(state=tk.DISABLED)
-        else:
-            self.start_button.config(state=tk.NORMAL)
-            self.stop_button.config(state=tk.DISABLED)
-            # 사운드 팩 목록이 유효할 때만 콤보박스 활성화
-            combo_state = "readonly" if self.sound_options and self.sound_options != ["None"] and self.sound_options != ["Error"] else tk.DISABLED
-            self.sound_combobox.config(state=combo_state)
-            self.volume_scale.config(state=tk.NORMAL)
-
-    def on_closing(self):
-        """애플리케이션 창 종료 시 호출될 함수"""
-        if self.is_running:
-            self.stop_sound()
-        if self.sound_player:
-            self.sound_player.unload()
-        self.master.destroy()
 
 
 if __name__ == "__main__":

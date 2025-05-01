@@ -12,21 +12,22 @@ logger = logging.getLogger(__name__)
 # handler.setFormatter(formatter)
 # logger.addHandler(handler)
 
+# --- 키보드 관련 설정 --- #
 # kbsim-master 분석 기반: release 시 특정 사운드가 있는 키들
-# (kbsim 코드의 keySounds[switchValue].press 객체에 존재하는 키들)
-# 실제 kbsim 구현에서는 동적으로 로드되지만, 여기서는 일반적인 키들을 기준으로 정의
 SPECIAL_RELEASE_KEYS = {
     'BACKSPACE', 'TAB', 'ENTER', 'CAPSLOCK', 'SHIFT', 'CTRL', 'ALT', 'SPACE',
     'ESC', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
     'PRTSC', 'SCROLLLOCK', 'PAUSE', 'INSERT', 'HOME', 'PGUP', 'DELETE', 'END', 'PGDN',
     'UP', 'DOWN', 'LEFT', 'RIGHT', 'WIN', 'MENU', 'NUMLOCK'
-    # 숫자패드 키 등 필요시 추가
 }
+
+# --- 마우스 관련 설정 --- #
+MOUSE_SOUND_FOLDER = os.path.join("src", "mouse")
 
 class SoundPlayer:
     def __init__(self):
         """사운드 플레이어 초기화"""
-        self.base_sound_folder = os.path.join("src", "keyboard")
+        self.keyboard_base_folder = os.path.join("src", "keyboard") # 변수명 변경
         self.mixer_initialized = False
         self.last_play_time = {} # 키별 마지막 재생 시간 기록
         self.sound_cache = {} # 사운드 객체 캐시
@@ -55,7 +56,7 @@ class SoundPlayer:
         logger.info(f"Loading sound pack: '{sound_type}'...")
         self.sound_cache.clear() # 기존 캐시 비우기
         self.current_sound_pack = None # 로드 중 상태로 설정
-        pack_path = os.path.join(self.base_sound_folder, sound_type)
+        pack_path = os.path.join(self.keyboard_base_folder, sound_type)
         loaded_count = 0
         error_count = 0
 
@@ -89,6 +90,40 @@ class SoundPlayer:
         else:
             logger.error(f"No sounds loaded for pack '{sound_type}'. Errors: {error_count}")
             return False
+
+    def load_mouse_sound(self, sound_name):
+        """지정된 마우스 사운드 파일을 로드하여 캐시에 저장합니다."""
+        if not self.mixer_initialized:
+            logger.warning("Mixer not initialized. Cannot load mouse sound.")
+            return False
+        if not sound_name or sound_name == "None":
+            logger.warning("Invalid mouse sound name provided.")
+            return False
+
+        cache_key = ('mouse', sound_name.upper())
+        if cache_key in self.sound_cache:
+            # logger.debug(f"Mouse sound '{sound_name}' is already cached.")
+            return True # 이미 캐시됨
+
+        logger.info(f"Loading mouse sound: '{sound_name}'...")
+        loaded = False
+        for ext in [".wav", ".mp3"]:
+            file_path = os.path.join(MOUSE_SOUND_FOLDER, f"{sound_name}{ext}")
+            if os.path.exists(file_path):
+                try:
+                    sound = pygame.mixer.Sound(file_path)
+                    self.sound_cache[cache_key] = sound
+                    logger.info(f"Successfully loaded mouse sound: {cache_key}")
+                    loaded = True
+                    break # 찾았으면 중단
+                except pygame.error as e:
+                    logger.error(f"Failed to load mouse sound '{file_path}': {e}")
+                    return False # 로드 실패
+
+        if not loaded:
+            logger.error(f"Mouse sound file not found for '{sound_name}' in {MOUSE_SOUND_FOLDER}")
+
+        return loaded
 
     def _find_sound_object(self, sound_type, event_type, key_name, row_index=None):
         """캐시에서 키에 맞는 Sound 객체를 찾습니다.
@@ -186,6 +221,32 @@ class SoundPlayer:
         # else:
             # logger.debug(f"[DEBUG] Play Sound: No sound object found for {sound_type}/{event_type}/{key_name}")
 
+    def play_mouse_click_sound(self, sound_name, volume_percent):
+        """캐시된 마우스 클릭 사운드를 찾아 재생합니다."""
+        if not self.mixer_initialized or not sound_name or sound_name == "None":
+            return
+
+        cache_key = ('mouse', sound_name.upper())
+        sound_object = self.sound_cache.get(cache_key)
+
+        if sound_object:
+            logger.debug(f"[DEBUG] Play Mouse Sound: Found cached object for {sound_name}")
+            try:
+                volume_float = max(0.0, min(1.0, volume_percent / 100.0))
+                sound_object.set_volume(volume_float)
+                # 마우스 사운드는 짧으므로 채널을 굳이 찾지 않고 바로 재생 시도 (play는 새 채널 사용)
+                sound_object.play()
+                # 필요하다면 중복 재생 방지 로직 추가
+                # current_time = time.time()
+                # sound_full_key = f"mouse_{sound_name}"
+                # self.last_play_time[sound_full_key] = current_time
+            except pygame.error as e:
+                logger.error(f"Error playing mouse sound '{sound_name}': {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error playing mouse sound '{sound_name}': {e}")
+        else:
+            logger.warning(f"Mouse sound object not found in cache for '{sound_name}'. Please load it first.")
+
     def unload(self):
         """pygame mixer 종료 및 캐시 비우기"""
         if self.mixer_initialized:
@@ -202,7 +263,10 @@ class SoundPlayer:
 if __name__ == '__main__':
 
     # --- 테스트 환경 설정 --- (폴더 및 샘플 파일 생성)
-    test_base_folder = os.path.join("src", "keyboard")
+    keyboard_test_base_folder = os.path.join("src", "keyboard") # 키보드 경로
+    mouse_test_folder = os.path.join("src", "mouse") # 마우스 경로
+    os.makedirs(mouse_test_folder, exist_ok=True)
+
     sound_types_to_test = ["TestType1"]
     event_types = ["press", "release"]
     # kbsim 규칙에 맞는 샘플 키와 Fallback 파일 정의
@@ -217,10 +281,10 @@ if __name__ == '__main__':
         "fallback": "GENERIC" # 일반 release fallback
     }
 
-    print("Setting up test environment...")
+    print("Setting up keyboard test environment...")
     for stype in sound_types_to_test:
         # Press 폴더 및 파일 생성
-        press_folder = os.path.join(test_base_folder, stype, "press")
+        press_folder = os.path.join(keyboard_test_base_folder, stype, "press")
         os.makedirs(press_folder, exist_ok=True)
         print(f"Ensured directory exists: {press_folder}")
         for key in sample_keys_press["specific"]:
@@ -231,7 +295,7 @@ if __name__ == '__main__':
              if not os.path.exists(filepath): open(filepath, 'w').close(); print(f"Created dummy: {filepath}")
 
         # Release 폴더 및 파일 생성
-        release_folder = os.path.join(test_base_folder, stype, "release")
+        release_folder = os.path.join(keyboard_test_base_folder, stype, "release")
         os.makedirs(release_folder, exist_ok=True)
         print(f"Ensured directory exists: {release_folder}")
         for key in sample_keys_release["specific"]:
@@ -239,52 +303,86 @@ if __name__ == '__main__':
              if not os.path.exists(filepath): open(filepath, 'w').close(); print(f"Created dummy: {filepath}")
         filepath = os.path.join(release_folder, f"{sample_keys_release['fallback']}.wav")
         if not os.path.exists(filepath): open(filepath, 'w').close(); print(f"Created dummy: {filepath}")
-    print("Test environment setup complete.")
+    print("Keyboard test environment setup complete.")
+
+    # 마우스 테스트 파일 생성
+    print("Setting up mouse test environment...")
+    mouse_files = ["click_1.wav", "click_2.mp3"]
+    for mfile in mouse_files:
+        mpath = os.path.join(mouse_test_folder, mfile)
+        if not os.path.exists(mpath): open(mpath, 'w').close(); print(f"Created dummy: {mpath}")
+    print("Mouse test environment setup complete.")
+
     # --- 테스트 환경 설정 끝 ---
 
     player = SoundPlayer()
 
     if player.mixer_initialized:
-        print("\n--- Running Playback Tests (kbsim rules) ---")
-        test_sound_type = "TestType1"
+        print("\n--- Running Keyboard Playback Tests ---")
+        test_keyboard_pack = "TestType1"
         volume = 80
+        # 키보드 팩 로드
+        player.load_sound_pack(test_keyboard_pack)
 
         # Press 테스트
         print("\nTest Press 1: Specific key ('A', row 3 expected)")
-        player.play_key_sound(test_sound_type, "press", "A", volume, row_index=3)
+        player.play_key_sound(test_keyboard_pack, "press", "A", volume, row_index=3)
         time.sleep(0.1)
 
         print("\nTest Press 2: Specific key ('SPACE', row 5 -> use 4)")
-        player.play_key_sound(test_sound_type, "press", "SPACE", volume, row_index=5) # row 5는 GENERICR4 사용 예상
+        player.play_key_sound(test_keyboard_pack, "press", "SPACE", volume, row_index=5) # row 5는 GENERICR4 사용 예상
         time.sleep(0.1)
 
         print("\nTest Press 3: Non-specific key ('Q', row 2 expected) -> Fallback GENERICR2")
-        player.play_key_sound(test_sound_type, "press", "Q", volume, row_index=2)
+        player.play_key_sound(test_keyboard_pack, "press", "Q", volume, row_index=2)
         time.sleep(0.1)
 
         print("\nTest Press 4: Non-specific key ('F1', row 0 expected) -> Fallback GENERICR0")
-        player.play_key_sound(test_sound_type, "press", "F1", volume, row_index=0)
+        player.play_key_sound(test_keyboard_pack, "press", "F1", volume, row_index=0)
         time.sleep(0.1)
 
         # Release 테스트
         print("\nTest Release 1: Specific release key ('SPACE')")
-        player.play_key_sound(test_sound_type, "release", "SPACE", volume)
+        player.play_key_sound(test_keyboard_pack, "release", "SPACE", volume)
         time.sleep(0.1)
 
         print("\nTest Release 2: Specific release key ('ENTER')")
-        player.play_key_sound(test_sound_type, "release", "ENTER", volume)
+        player.play_key_sound(test_keyboard_pack, "release", "ENTER", volume)
         time.sleep(0.1)
 
         print("\nTest Release 3: Non-specific release key ('A') -> Fallback GENERIC")
-        player.play_key_sound(test_sound_type, "release", "A", volume) # 'A'는 SPECIAL_RELEASE_KEYS 에 없으므로 GENERIC 예상
+        player.play_key_sound(test_keyboard_pack, "release", "A", volume) # 'A'는 SPECIAL_RELEASE_KEYS 에 없으므로 GENERIC 예상
         time.sleep(0.1)
 
         print("\nTest Release 4: Specific key ('SHIFT') but no specific file -> Fallback GENERIC")
         # SHIFT는 SPECIAL_RELEASE_KEYS에 있지만, 테스트 파일은 생성 안 함 -> GENERIC 예상
-        player.play_key_sound(test_sound_type, "release", "SHIFT", volume)
+        player.play_key_sound(test_keyboard_pack, "release", "SHIFT", volume)
         time.sleep(0.1)
 
-        print("\n--- Playback Tests Finished ---")
+        print("\n--- Keyboard Playback Tests Finished ---")
+
+        # 마우스 사운드 테스트
+        print("\n--- Running Mouse Playback Tests ---")
+        test_mouse_sound1 = "click_1"
+        test_mouse_sound2 = "click_2"
+
+        # 마우스 사운드 로드
+        player.load_mouse_sound(test_mouse_sound1)
+        player.load_mouse_sound(test_mouse_sound2)
+
+        print(f"\nTest Mouse Click 1: '{test_mouse_sound1}'")
+        player.play_mouse_click_sound(test_mouse_sound1, 90)
+        time.sleep(0.2)
+
+        print(f"\nTest Mouse Click 2: '{test_mouse_sound2}'")
+        player.play_mouse_click_sound(test_mouse_sound2, 70)
+        time.sleep(0.2)
+
+        print(f"\nTest Mouse Click (Not Loaded): 'click_3'")
+        player.play_mouse_click_sound("click_3", 80) # 캐시에 없으므로 경고 예상
+        time.sleep(0.1)
+
+        print("\n--- Mouse Playback Tests Finished ---")
 
     player.unload()
     print("Test finished.") 
