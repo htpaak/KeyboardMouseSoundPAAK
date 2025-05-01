@@ -28,7 +28,6 @@ An application that plays delightful sound effects when you type on the keyboard
 ## Demo 📸
 
 ![Demo_1](assets/Demo_1.png)
-![Demo_2](assets/Demo_2.png)
 
 ## System Requirements 💻
 
