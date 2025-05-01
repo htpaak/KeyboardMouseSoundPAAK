@@ -1,37 +1,71 @@
 import sys
+import os
+import ctypes
 from log_setup import setup_logging
-import tkinter as tk
-from main_gui import KeyboardSoundApp
+# import tkinter as tk # Tkinter 제거
+from PyQt5.QtWidgets import QApplication # PyQt5 임포트
+from PyQt5.QtGui import QIcon # PyQt5 임포트
+# from main_gui import KeyboardSoundApp # Tkinter GUI 제거 (추후 PyQt5 GUI 임포트)
 
 setup_logging() # 항상 호출 (내부에서 조건 확인)
 
-# 애플리케이션의 메인 로직을 여기에 작성하세요.
-# 예: import my_app
-#     my_app.run()
+COMPANY_NAME = "htpaak"
+PRODUCT_NAME = "KeyboardSoundApp"
+APP_VERSION = "1.0.0" # 버전 정의 (필요시)
+MYAPPID = f"{COMPANY_NAME}.{PRODUCT_NAME}.{APP_VERSION}" # AppUserModelID 정의
+ICON_PATH = os.path.abspath(os.path.join("assets", "icon.ico")) # 아이콘 경로 정의
+
+# --- AppUserModelID 설정 (QApplication 생성 전) ---
+try:
+    if os.name == 'nt':
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(MYAPPID)
+        print(f"Set AppUserModelID: {MYAPPID}")
+except Exception as appid_e:
+    print(f"Warning: Failed to set AppUserModelID: {appid_e}")
+# --- AppUserModelID 설정 끝 ---
+
 
 if __name__ == "__main__":
-    """애플리케이션 메인 실행 지점"""
+    """애플리케이션 메인 실행 지점 (PyQt5)"""
+    app = QApplication(sys.argv) # QApplication 생성
+
+    # --- 애플리케이션 아이콘 설정 ---
+    if os.path.exists(ICON_PATH):
+        app.setWindowIcon(QIcon(ICON_PATH))
+        print(f"Application icon set from: {ICON_PATH}")
+    else:
+        print(f"Warning: Icon file not found at {ICON_PATH}")
+    # --- 아이콘 설정 끝 ---
+
+    # --- 메인 윈도우 생성 및 실행 ---
     try:
-        root = tk.Tk() # 메인 Tkinter 윈도우 생성
-        app = KeyboardSoundApp(root) # 애플리케이션 클래스 인스턴스화
-        root.mainloop() # Tkinter 이벤트 루프 시작
+        from main_gui import MainWindow # PyQt5 MainWindow 임포트
+        window = MainWindow()
+        window.show()
+        # # 임시 코드 제거
+        # from PyQt5.QtWidgets import QLabel
+        # window = QLabel("main_gui.py migration in progress...")
+        # window.setWindowTitle("Keyboard Sound App") # 임시 제목
+        # window.show()
+    except ImportError as import_err:
+        print(f"Error: Could not import MainWindow from main_gui.py: {import_err}")
+        # PyQt5 메시지 박스를 사용하기 위해 QApplication 인스턴스가 필요
+        # 하지만 이 시점에서는 app.exec_()가 호출되지 않았으므로
+        # 간단한 print 후 종료하거나, 더 복잡한 오류 처리 필요
+        print("Please ensure main_gui.py contains the MainWindow class.")
+        sys.exit(1)
     except Exception as e:
-        # 예기치 못한 오류 발생 시 사용자에게 알림 (선택적)
+        # 예기치 못한 오류 처리 (PyQt5 스타일)
+        from PyQt5.QtWidgets import QMessageBox
         import traceback
-        from tkinter import messagebox
-        # GUI가 초기화되지 않았을 수도 있으므로 간단한 메시지 박스 시도
-        try:
-            # 간단한 임시 루트 생성 시도
-            error_root = tk.Tk()
-            error_root.withdraw() # 창 숨김
-            messagebox.showerror("Fatal Error", f"An unexpected error occurred:\n\n{e}\n\nTraceback:\n{traceback.format_exc()}")
-            error_root.destroy()
-        except Exception:
-            # GUI 조차 안될 경우 콘솔 출력
-            print("--- FATAL ERROR ---")
-            print(f"An unexpected error occurred: {e}")
-            print("Traceback:")
-            print(traceback.format_exc())
-        finally:
-            # 프로그램 종료
-            sys.exit(1)
+        # QApplication 인스턴스가 생성된 후이므로 메시지 박스 사용 가능
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setWindowTitle("Fatal Error")
+        msg.setText(f"An unexpected error occurred:\n\n{e}")
+        msg.setDetailedText(traceback.format_exc())
+        msg.exec_()
+        sys.exit(1)
+    # --- 메인 윈도우 끝 ---
+
+    sys.exit(app.exec_()) # PyQt5 이벤트 루프 시작

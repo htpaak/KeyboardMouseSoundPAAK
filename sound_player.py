@@ -100,28 +100,31 @@ class SoundPlayer:
             logger.warning("Invalid mouse sound name provided.")
             return False
 
-        cache_key = ('mouse', sound_name.upper())
+        cache_key = ('mouse', sound_name)
         if cache_key in self.sound_cache:
             # logger.debug(f"Mouse sound '{sound_name}' is already cached.")
             return True # 이미 캐시됨
 
         logger.info(f"Loading mouse sound: '{sound_name}'...")
         loaded = False
-        for ext in [".wav", ".mp3"]:
-            file_path = os.path.join(MOUSE_SOUND_FOLDER, f"{sound_name}{ext}")
-            if os.path.exists(file_path):
-                try:
-                    sound = pygame.mixer.Sound(file_path)
-                    self.sound_cache[cache_key] = sound
-                    logger.info(f"Successfully loaded mouse sound: {cache_key}")
-                    loaded = True
-                    break # 찾았으면 중단
-                except pygame.error as e:
-                    logger.error(f"Failed to load mouse sound '{file_path}': {e}")
-                    return False # 로드 실패
+        # --- 파일 경로 수정: 전달받은 sound_name (확장자 포함) 그대로 사용 --- #
+        file_path = os.path.join(MOUSE_SOUND_FOLDER, sound_name)
+
+        if os.path.exists(file_path):
+            try:
+                sound = pygame.mixer.Sound(file_path)
+                # --- 캐시 키 수정: 전체 파일 이름 사용 --- #
+                self.sound_cache[cache_key] = sound
+                logger.info(f"Successfully loaded mouse sound: {cache_key}")
+                loaded = True
+                # break # 루프 제거했으므로 break 필요 없음
+            except pygame.error as e:
+                logger.error(f"Failed to load mouse sound '{file_path}': {e}")
+                return False # 로드 실패
 
         if not loaded:
-            logger.error(f"Mouse sound file not found for '{sound_name}' in {MOUSE_SOUND_FOLDER}")
+            # 에러 로그 메시지 수정: file_path 사용
+            logger.error(f"Mouse sound file not found at '{file_path}'")
 
         return loaded
 
@@ -131,7 +134,7 @@ class SoundPlayer:
         Args:
             sound_type (str): 사운드 종류 (폴더명).
             event_type (str): "press" 또는 "release".
-            key_name (str): 대상 키 이름 (예: 'A', 'SPACE').
+            key_name (str): 대상 키 이름 (예: 'A', 'SPACE', 또는 마우스의 경우 'click_1.wav').
             row_index (int, optional): 키의 행 인덱스 (0-4). press 이벤트에만 사용됨.
 
         Returns:
@@ -139,7 +142,14 @@ class SoundPlayer:
         """
         if not self.mixer_initialized or key_name is None:
             return None
-        # 현재 로드된 팩과 요청된 팩이 다르면 로드 시도 또는 None 반환
+
+        # --- 마우스 사운드 처리 추가 ---
+        if sound_type == 'mouse':
+            cache_key = ('mouse', key_name) # 마우스는 전체 파일명을 key_name으로 사용
+            return self.sound_cache.get(cache_key)
+        # ---------------------------
+
+        # 현재 로드된 키보드 팩과 요청된 팩이 다르면 로드 시도 또는 None 반환
         if self.current_sound_pack != sound_type:
             logger.warning(f"Requested sound pack '{sound_type}' is not loaded. Current: '{self.current_sound_pack}'")
             # 필요시 여기서 self.load_sound_pack(sound_type) 호출 고려
@@ -196,7 +206,7 @@ class SoundPlayer:
              # logger.debug(f"Skipping duplicate play for {sound_full_key}")
              return
 
-        # 캐시에서 Sound 객체 찾기
+        # 캐시에서 Sound 객체 찾기 (sound_type이 'keyboard'임을 명시적으로 가정)
         sound_object = self._find_sound_object(sound_type, event_type, key_name, row_index)
 
         if sound_object:
@@ -226,8 +236,8 @@ class SoundPlayer:
         if not self.mixer_initialized or not sound_name or sound_name == "None":
             return
 
-        cache_key = ('mouse', sound_name.upper())
-        sound_object = self.sound_cache.get(cache_key)
+        # 캐시에서 Sound 객체 찾기 (sound_type='mouse', key_name=sound_name 사용)
+        sound_object = self._find_sound_object('mouse', None, sound_name)
 
         if sound_object:
             logger.debug(f"[DEBUG] Play Mouse Sound: Found cached object for {sound_name}")
@@ -248,15 +258,13 @@ class SoundPlayer:
             logger.warning(f"Mouse sound object not found in cache for '{sound_name}'. Please load it first.")
 
     def unload(self):
-        """pygame mixer 종료 및 캐시 비우기"""
+        """모든 로드된 사운드를 언로드하고 캐시를 비웁니다."""
         if self.mixer_initialized:
-            pygame.mixer.fadeout(500) # 부드럽게 종료 (선택 사항)
-            pygame.mixer.stop() # 모든 사운드 즉시 중지
-            pygame.mixer.quit()
-            self.mixer_initialized = False
-            self.sound_cache.clear() # 캐시 비우기
-            self.current_sound_pack = None
-            logger.info("Sound player unloaded and cache cleared.")
+            pygame.mixer.stop() # 모든 사운드 재생 중지
+        self.sound_cache.clear()
+        self.last_play_time.clear()
+        self.current_sound_pack = None
+        logger.info("Sound player unloaded and cache cleared.")
 
 
 # --- 테스트용 코드 --- (수정됨)
