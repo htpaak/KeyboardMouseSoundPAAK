@@ -10,7 +10,7 @@ import traceback # traceback 임포트 추가
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QPushButton, QComboBox, QSlider, QFrame, QSplitter, QStyleFactory,
-    QMessageBox, QSystemTrayIcon, QMenu, QAction # QMessageBox, QSystemTrayIcon, QMenu, QAction 추가
+    QMessageBox, QSystemTrayIcon, QMenu, QAction, QStyle # QStyle 추가
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, QUrl # QThread, QUrl 추가
 from PyQt5.QtGui import QIcon, QDesktopServices # QDesktopServices 추가
