@@ -252,10 +252,12 @@ class MainWindow(QMainWindow):
 
         # Volume 조절
         k_volume_layout = QHBoxLayout()
+        k_volume_layout.setContentsMargins(0, 5, 0, 5) # 상하 마진 추가
         k_volume_layout.addWidget(QLabel("Volume:"))
         self.keyboard_volume_slider = QSlider(Qt.Horizontal)
         self.keyboard_volume_slider.setRange(0, 100)
         self.keyboard_volume_slider.setValue(self.keyboard_volume)
+        self.keyboard_volume_slider.setMinimumHeight(30) # 슬라이더 최소 높이 설정
         k_volume_layout.addWidget(self.keyboard_volume_slider)
         self.keyboard_volume_label = QLabel(f"{self.keyboard_volume:3d}%")
         k_volume_layout.addWidget(self.keyboard_volume_label)
@@ -317,10 +319,12 @@ class MainWindow(QMainWindow):
 
         # Volume 조절
         m_volume_layout = QHBoxLayout()
+        m_volume_layout.setContentsMargins(0, 5, 0, 5) # 상하 마진 추가
         m_volume_layout.addWidget(QLabel("Volume:"))
         self.mouse_volume_slider = QSlider(Qt.Horizontal)
         self.mouse_volume_slider.setRange(0, 100)
         self.mouse_volume_slider.setValue(self.mouse_volume)
+        self.mouse_volume_slider.setMinimumHeight(30) # 슬라이더 최소 높이 설정
         m_volume_layout.addWidget(self.mouse_volume_slider)
         self.mouse_volume_label = QLabel(f"{self.mouse_volume:3d}%")
         m_volume_layout.addWidget(self.mouse_volume_label)
