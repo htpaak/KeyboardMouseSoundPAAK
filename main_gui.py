@@ -441,14 +441,14 @@ class MainWindow(QMainWindow):
     def _update_keyboard_volume(self, value):
         self.keyboard_volume = value
         self.keyboard_volume_label.setText(f"{value:3d}%")
-        if self.sound_player:
-            self.sound_player.set_keyboard_volume(value) # SoundPlayer에 해당 메서드 필요
+        # if self.sound_player: # SoundPlayer에 해당 메서드 없으므로 제거
+        #     self.sound_player.set_keyboard_volume(value)
 
     def _update_mouse_volume(self, value):
         self.mouse_volume = value
         self.mouse_volume_label.setText(f"{value:3d}%")
-        if self.sound_player:
-             self.sound_player.set_mouse_volume(value) # SoundPlayer에 해당 메서드 필요
+        # if self.sound_player: # SoundPlayer에 해당 메서드 없으므로 제거
+        #      self.sound_player.set_mouse_volume(value)
 
     def _update_keyboard_button_state(self, is_running):
         """키보드 시작/종료 버튼 상태 업데이트 (시그널로부터 호출됨)"""
