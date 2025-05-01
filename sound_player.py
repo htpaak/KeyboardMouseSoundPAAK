@@ -92,7 +92,7 @@ class SoundPlayer:
             return False
 
     def load_mouse_sound(self, sound_name):
-        """지정된 마우스 사운드 파일을 로드하여 캐시에 저장합니다."""
+        """지정된 마우스 사운드 이름(확장자 제외)으로 파일을 찾아 로드하고 캐시합니다."""
         if not self.mixer_initialized:
             logger.warning("Mixer not initialized. Cannot load mouse sound.")
             return False
@@ -100,6 +100,7 @@ class SoundPlayer:
             logger.warning("Invalid mouse sound name provided.")
             return False
 
+        # 캐시 키는 확장자 없는 이름 사용
         cache_key = ('mouse', sound_name)
         if cache_key in self.sound_cache:
             # logger.debug(f"Mouse sound '{sound_name}' is already cached.")
@@ -107,24 +108,24 @@ class SoundPlayer:
 
         logger.info(f"Loading mouse sound: '{sound_name}'...")
         loaded = False
-        # --- 파일 경로 수정: 전달받은 sound_name (확장자 포함) 그대로 사용 --- #
-        file_path = os.path.join(MOUSE_SOUND_FOLDER, sound_name)
-
-        if os.path.exists(file_path):
-            try:
-                sound = pygame.mixer.Sound(file_path)
-                # --- 캐시 키 수정: 전체 파일 이름 사용 --- #
-                self.sound_cache[cache_key] = sound
-                logger.info(f"Successfully loaded mouse sound: {cache_key}")
-                loaded = True
-                # break # 루프 제거했으므로 break 필요 없음
-            except pygame.error as e:
-                logger.error(f"Failed to load mouse sound '{file_path}': {e}")
-                return False # 로드 실패
+        # --- 파일 찾기: .wav, .mp3, .ogg 순서로 시도 --- #
+        for ext in [".wav", ".mp3", ".ogg"]:
+            file_path = os.path.join(MOUSE_SOUND_FOLDER, f"{sound_name}{ext}")
+            if os.path.exists(file_path):
+                try:
+                    sound = pygame.mixer.Sound(file_path)
+                    self.sound_cache[cache_key] = sound # 캐시 키는 확장자 없는 이름
+                    logger.info(f"Successfully loaded mouse sound '{file_path}' with cache key: {cache_key}")
+                    loaded = True
+                    break # 찾았으면 중단
+                except pygame.error as e:
+                    logger.error(f"Failed to load mouse sound '{file_path}': {e}")
+                    # 로드 실패 시 다음 확장자 시도 (여기서 return False 하지 않음)
+                    loaded = False # 명시적으로 실패 상태 유지
 
         if not loaded:
-            # 에러 로그 메시지 수정: file_path 사용
-            logger.error(f"Mouse sound file not found at '{file_path}'")
+            # 시도한 모든 확장자에 대해 파일을 찾지 못함
+            logger.error(f"Mouse sound file not found for basename '{sound_name}' with supported extensions in '{MOUSE_SOUND_FOLDER}'")
 
         return loaded
 
@@ -132,9 +133,9 @@ class SoundPlayer:
         """캐시에서 키에 맞는 Sound 객체를 찾습니다.
 
         Args:
-            sound_type (str): 사운드 종류 (폴더명).
-            event_type (str): "press" 또는 "release".
-            key_name (str): 대상 키 이름 (예: 'A', 'SPACE', 또는 마우스의 경우 'click_1.wav').
+            sound_type (str): 사운드 종류 (폴더명 또는 'mouse').
+            event_type (str): "press" 또는 "release" (마우스의 경우 None).
+            key_name (str): 대상 키 이름 (예: 'A', 'SPACE') 또는 마우스 사운드 이름 (확장자 제외).
             row_index (int, optional): 키의 행 인덱스 (0-4). press 이벤트에만 사용됨.
 
         Returns:
@@ -143,16 +144,15 @@ class SoundPlayer:
         if not self.mixer_initialized or key_name is None:
             return None
 
-        # --- 마우스 사운드 처리 추가 ---
+        # --- 마우스 사운드 처리 수정: key_name은 확장자 없는 이름 --- #
         if sound_type == 'mouse':
-            cache_key = ('mouse', key_name) # 마우스는 전체 파일명을 key_name으로 사용
+            cache_key = ('mouse', key_name)
             return self.sound_cache.get(cache_key)
-        # ---------------------------
+        # ------------------------------------------------------ #
 
         # 현재 로드된 키보드 팩과 요청된 팩이 다르면 로드 시도 또는 None 반환
         if self.current_sound_pack != sound_type:
             logger.warning(f"Requested sound pack '{sound_type}' is not loaded. Current: '{self.current_sound_pack}'")
-            # 필요시 여기서 self.load_sound_pack(sound_type) 호출 고려
             return None
 
         target_sound_name = None # 찾을 사운드의 이름 (키 이름 또는 fallback 이름)
@@ -232,7 +232,7 @@ class SoundPlayer:
             # logger.debug(f"[DEBUG] Play Sound: No sound object found for {sound_type}/{event_type}/{key_name}")
 
     def play_mouse_click_sound(self, sound_name, volume_percent):
-        """캐시된 마우스 클릭 사운드를 찾아 재생합니다."""
+        """캐시된 마우스 클릭 사운드를 찾아 재생합니다. (sound_name은 확장자 제외)"""
         if not self.mixer_initialized or not sound_name or sound_name == "None":
             return
 
@@ -244,12 +244,7 @@ class SoundPlayer:
             try:
                 volume_float = max(0.0, min(1.0, volume_percent / 100.0))
                 sound_object.set_volume(volume_float)
-                # 마우스 사운드는 짧으므로 채널을 굳이 찾지 않고 바로 재생 시도 (play는 새 채널 사용)
                 sound_object.play()
-                # 필요하다면 중복 재생 방지 로직 추가
-                # current_time = time.time()
-                # sound_full_key = f"mouse_{sound_name}"
-                # self.last_play_time[sound_full_key] = current_time
             except pygame.error as e:
                 logger.error(f"Error playing mouse sound '{sound_name}': {e}")
             except Exception as e:

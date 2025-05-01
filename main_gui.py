@@ -416,7 +416,10 @@ class MainWindow(QMainWindow):
             print(f"[WARN] Mouse sound directory not found: {base_dir}")
             return ["None"]
         valid_extensions = (".wav", ".mp3", ".ogg")
-        available_sounds = [f for f in os.listdir(base_dir) if os.path.isfile(os.path.join(base_dir, f)) and f.lower().endswith(valid_extensions)]
+        # 확장자 제외한 파일 이름만 가져오도록 수정
+        available_sounds = [os.path.splitext(f)[0] for f in os.listdir(base_dir) if os.path.isfile(os.path.join(base_dir, f)) and f.lower().endswith(valid_extensions)]
+        # 중복 제거 (선택적이지만 권장)
+        available_sounds = sorted(list(set(available_sounds)))
         return ["None"] + available_sounds if available_sounds else ["None"]
 
     # --- 키/마우스 이벤트 핸들러 --- #
