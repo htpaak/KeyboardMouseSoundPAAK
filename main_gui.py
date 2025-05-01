@@ -140,7 +140,7 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         """UI 요소들을 초기화하고 배치합니다."""
         self.setWindowTitle("🎧 Sound Input Fun! 🖱️")
-        self.setMinimumSize(500, 250) # 최소 크기 설정 (조절 가능)
+        self.setMinimumSize(500, 200) # 최소 높이 250 -> 200 으로 변경
 
         # --- 메인 위젯 및 레이아웃 설정 ---
         central_widget = QWidget()
@@ -289,34 +289,55 @@ class MainWindow(QMainWindow):
                 background-color: #a5d8ff;
             }
             QPushButton:disabled {
-                background-color: #f1f3f5;
-                color: #adb5bd;
-                border-color: #dee2e6;
+                background-color: #6c757d; /* 매우 어두운 회색 배경 */
+                color: #dee2e6;         /* 매우 밝은 회색 텍스트 */
+                border-color: #495057;   /* 테두리도 어둡게 */
             }
             /* 시작/종료 버튼 색상 차별화 (객체 이름 사용) */
             QPushButton#StartButton {
-                 background-color: #e6fcf5; /* 연한 민트 */
-                 color: #087f5b;
-                 border-color: #96f2d7;
+                 /* 이전: #e6fcf5 (매우 연한 민트) */
+                 background-color: #c3fae8; /* 약간 더 진한 민트 */
+                 color: #087f5b;         /* 텍스트 색상 유지 */
+                 border-color: #63e6be;   /* 테두리 색상 조정 */
             }
             QPushButton#StartButton:hover {
-                 background-color: #c3fae8;
-                 border-color: #63e6be;
+                 /* 이전: #c3fae8 */
+                 background-color: #96f2d7;
+                 /* 이전: #63e6be */
+                 border-color: #38d9a9;   /* 호버 시 테두리 더 진하게 */
             }
             QPushButton#StartButton:pressed {
-                 background-color: #96f2d7;
+                 /* 이전: #96f2d7 */
+                 background-color: #63e6be;
             }
+            /* 비활성화 상태 스타일 추가 */
+            QPushButton#StartButton:disabled {
+                 background-color: #e0f2f1; /* 연한 민트 계열 회색 */
+                 color: #b0bec5;         /* 연한 회색 텍스트 */
+                 border-color: #b2dfdb;   /* 조금 더 진한 민트 계열 회색 테두리 */
+            }
+
              QPushButton#StopButton {
-                 background-color: #fff0f6; /* 연한 핑크 */
-                 color: #c2255c;
-                 border-color: #fcc2d7;
+                 /* 이전: #fff0f6 (매우 연한 핑크) */
+                 background-color: #ffe0e6; /* 약간 더 진한 핑크 */
+                 color: #c2255c;         /* 텍스트 색상 유지 */
+                 border-color: #faa2c1;   /* 테두리 색상 조정 */
             }
             QPushButton#StopButton:hover {
-                 background-color: #ffe0e6;
-                 border-color: #faa2c1;
+                 /* 이전: #ffe0e6 */
+                 background-color: #fcc2d7;
+                 /* 이전: #faa2c1 */
+                 border-color: #f783ac;   /* 호버 시 테두리 더 진하게 */
             }
             QPushButton#StopButton:pressed {
-                 background-color: #fcc2d7;
+                 /* 이전: #fcc2d7 */
+                 background-color: #faa2c1;
+            }
+            /* 비활성화 상태 스타일 추가 */
+            QPushButton#StopButton:disabled {
+                 background-color: #fce4ec; /* 연한 핑크 계열 회색 */
+                 color: #b0bec5;         /* 연한 회색 텍스트 */
+                 border-color: #f8bbd0;   /* 조금 더 진한 핑크 계열 회색 테두리 */
             }
             QComboBox {
                 border: 1px solid #ced4da;
