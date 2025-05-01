@@ -26,7 +26,7 @@ SPECIAL_RELEASE_KEYS = {
 class SoundPlayer:
     def __init__(self):
         """사운드 플레이어 초기화"""
-        self.base_sound_folder = os.path.join("src", "audio")
+        self.base_sound_folder = os.path.join("src", "keyboard")
         self.mixer_initialized = False
         self.last_play_time = {} # 키별 마지막 재생 시간 기록
         self.sound_cache = {} # 사운드 객체 캐시
@@ -202,7 +202,7 @@ class SoundPlayer:
 if __name__ == '__main__':
 
     # --- 테스트 환경 설정 --- (폴더 및 샘플 파일 생성)
-    test_base_folder = os.path.join("src", "audio")
+    test_base_folder = os.path.join("src", "keyboard")
     sound_types_to_test = ["TestType1"]
     event_types = ["press", "release"]
     # kbsim 규칙에 맞는 샘플 키와 Fallback 파일 정의

@@ -115,7 +115,7 @@ class KeyboardSoundApp:
         # 사용 가능한 첫 번째 사운드 팩을 기본값으로 설정 (None 이나 Error가 아닐 경우)
         default_sound = self.sound_options[0] if self.sound_options and self.sound_options[0] not in ["None", "Error"] else "None"
         self.sound_var.set(default_sound)
-        self.sound_combobox = ttk.Combobox(sound_frame, textvariable=self.sound_var, values=self.sound_options, state="readonly", width=15)
+        self.sound_combobox = ttk.Combobox(sound_frame, textvariable=self.sound_var, values=self.sound_options, state="readonly", width=10)
         self.sound_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X)
 
         # 볼륨 조절
