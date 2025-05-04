@@ -59,17 +59,23 @@ if __name__ == "__main__":
         print(f"Warning: Icon file not found at {ICON_PATH}")
     # --- 아이콘 설정 끝 ---
 
-    # --- 메인 윈도우 생성 및 실행 ---
+    # --- 메인 윈도우 생성 --- #
     try:
         from main_gui import MainWindow # PyQt5 MainWindow 임포트
         window = MainWindow()
-        window.show()
+        # window.show() # 기존 코드: 항상 표시
         # window.center_window() # 창 표시 후 중앙 정렬 호출 (main_gui.py의 showEvent로 이동)
-        # # 임시 코드 제거
-        # from PyQt5.QtWidgets import QLabel
-        # window = QLabel("main_gui.py migration in progress...")
-        # window.setWindowTitle("Keyboard Sound App") # 임시 제목
-        # window.show()
+
+        # --- 시작 인자 확인 및 창 표시 제어 --- #
+        start_in_background = "--background" in sys.argv
+        if not start_in_background:
+            print("Starting with main window visible.")
+            window.show() # --background 인자가 없으면 창 표시
+        else:
+            print("Starting minimized to tray (--background argument detected).")
+            # 트레이 아이콘은 MainWindow.__init__ -> init_tray_icon 에서 표시됨
+        # --- 창 표시 제어 끝 --- #
+
     except ImportError as import_err:
         print(f"Error: Could not import MainWindow from main_gui.py: {import_err}")
         # PyQt5 메시지 박스를 사용하기 위해 QApplication 인스턴스가 필요

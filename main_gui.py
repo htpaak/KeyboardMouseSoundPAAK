@@ -2,6 +2,7 @@ import sys
 import os
 import traceback # traceback 임포트 추가
 import winreg # winreg 모듈 임포트 추가
+import json # json 모듈 임포트 추가
 # import tkinter as tk # Tkinter 제거
 # from tkinter import messagebox # Tkinter 제거
 # import ttkbootstrap as ttk # ttkbootstrap 제거
@@ -41,6 +42,8 @@ def resource_path(relative_path):
 # --- 레지스트리 상수 --- #
 REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 APP_NAME = "KeyboardMouseSoundPAAK"
+SETTINGS_FOLDER = os.path.join(os.getenv('APPDATA'), APP_NAME)
+SETTINGS_FILE = os.path.join(SETTINGS_FOLDER, "settings.json")
 # --- 레지스트리 상수 끝 --- #
 
 # --- 상수 정의 (필요시 유지 또는 PyQt5 스타일로 변경) ---
@@ -177,6 +180,10 @@ class MainWindow(QMainWindow):
         self.apply_stylesheet()
         # -----------------------
 
+        # --- 설정 로드 및 적용 --- #
+        self._load_settings()
+        # --- 설정 로드 끝 --- #
+
         self.tray_icon.show() # 트레이 아이콘 표시
 
     def init_tray_icon(self):
@@ -242,6 +249,8 @@ class MainWindow(QMainWindow):
         # 트레이 아이콘 숨기기 (선택 사항, 종료 시 자동으로 제거될 수 있음)
         if self.tray_icon:
             self.tray_icon.hide()
+
+        self._save_settings() # 설정 저장
 
         QApplication.quit() # QApplication 종료
 
@@ -683,15 +692,19 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Warning", "Start on Boot can only be enabled for the packaged (.exe) version.")
                 return False
 
+            # 실행 명령어에 --background 인자 추가
+            command = f'"{executable_path}" --background'
+
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_WRITE)
-            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{executable_path}"') # 경로에 공백 있을 수 있으므로 따옴표 추가
+            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, command) # 수정된 명령어 저장
             winreg.CloseKey(key)
             return True
         except FileNotFoundError:
             # 키가 없는 경우 (드묾)
             try:
+                command = f'"{executable_path}" --background' # 여기도 수정
                 key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_PATH)
-                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{executable_path}"')
+                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, command)
                 winreg.CloseKey(key)
                 return True
             except Exception as e:
@@ -731,14 +744,17 @@ class MainWindow(QMainWindow):
         """애플리케이션이 현재 시작 프로그램에 등록되어 있는지 확인합니다."""
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_READ)
-            value, reg_type = winreg.QueryValueEx(key, APP_NAME)
+            # 저장된 전체 명령어 읽기 (예: "C:\path\to\app.exe" --background)
+            stored_command, reg_type = winreg.QueryValueEx(key, APP_NAME)
             winreg.CloseKey(key)
 
-            # 저장된 경로와 현재 실행 경로가 일치하는지 확인 (따옴표 제거 후 비교)
-            current_executable = sys.executable
-            stored_executable = value.strip('"') # 저장 시 추가한 따옴표 제거
+            # 저장된 명령어에서 실행 파일 경로 부분만 추출 (따옴표 및 인자 제거)
+            stored_executable = stored_command.strip().split('"')[1] if stored_command.startswith('"') else stored_command.split(' ')[0]
 
-            # 대소문자 구분 없이 경로 비교 (Windows 경로 특성 고려)
+            # 현재 실행 파일 경로
+            current_executable = sys.executable
+
+            # 대소문자 구분 없이 경로 비교
             return os.path.normcase(stored_executable) == os.path.normcase(current_executable)
         except FileNotFoundError:
             # 값이 없으면 등록되지 않은 것
@@ -1057,5 +1073,68 @@ class MainWindow(QMainWindow):
             self.stop_mouse_sound()
         if self.sound_player:
              self.sound_player.unload() # 앱 종료 시 모든 사운드 언로드
+
+    # --- 설정 저장/로드 메서드 --- #
+    def _save_settings(self):
+        """현재 설정을 JSON 파일에 저장합니다."""
+        settings = {
+            "keyboard_pack": self.keyboard_sound_combobox.currentText(),
+            "keyboard_volume": self.keyboard_volume_slider.value(),
+            "keyboard_running": self.keyboard_is_running,
+            "mouse_sound": self.mouse_sound_combobox.currentText(),
+            "mouse_volume": self.mouse_volume_slider.value(),
+            "mouse_running": self.mouse_is_running,
+            "start_on_boot": self.start_on_boot_checkbox.isChecked()
+        }
+        try:
+            os.makedirs(SETTINGS_FOLDER, exist_ok=True) # 설정 폴더 생성
+            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=4)
+            print(f"Settings saved to {SETTINGS_FILE}")
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+            # 여기서 사용자에게 오류 알림은 생략 (종료 시점)
+
+    def _load_settings(self):
+        """JSON 파일에서 설정을 로드하고 UI에 적용합니다."""
+        try:
+            if os.path.exists(SETTINGS_FILE):
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                print(f"Settings loaded from {SETTINGS_FILE}")
+
+                # UI 요소 업데이트
+                self.keyboard_sound_combobox.setCurrentText(settings.get("keyboard_pack", "None"))
+                self.keyboard_volume_slider.setValue(settings.get("keyboard_volume", 100))
+                # self.keyboard_volume_label 업데이트는 슬라이더 signal 처리기에 의해 자동으로 될 것임
+
+                self.mouse_sound_combobox.setCurrentText(settings.get("mouse_sound", "None"))
+                self.mouse_volume_slider.setValue(settings.get("mouse_volume", 100))
+                # self.mouse_volume_label 업데이트는 슬라이더 signal 처리기에 의해 자동으로 될 것임
+
+                # 시작 시 부팅 상태는 레지스트리 확인 결과를 우선으로 할 수 있음
+                # 여기서는 설정 파일 값을 따르도록 함 (레지스트리 상태와 다를 경우 동기화 문제 가능성 있음)
+                # self.start_on_boot_checkbox.setChecked(settings.get("start_on_boot", False))
+                # -> __init__ 에서 레지스트리 체크 후 설정하는 로직 유지하고 여기서는 로드만
+                stored_start_on_boot = settings.get("start_on_boot", False)
+                # print(f"  Loaded start_on_boot setting: {stored_start_on_boot}")
+                # 실제 체크박스 설정은 __init__에서 레지스트리 확인 후 진행
+
+                # 저장된 실행 상태에 따라 리스너 자동 시작
+                if settings.get("keyboard_running", False):
+                    print("  -> Automatically starting keyboard listener based on saved state.")
+                    self.start_keyboard_sound()
+
+                if settings.get("mouse_running", False):
+                    print("  -> Automatically starting mouse listener based on saved state.")
+                    self.start_mouse_sound()
+
+            else:
+                print(f"Settings file not found ({SETTINGS_FILE}). Using default values.")
+
+        except json.JSONDecodeError as e:
+            print(f"Error decoding settings file ({SETTINGS_FILE}): {e}. Using default values.")
+        except Exception as e:
+            print(f"Error loading settings: {e}. Using default values.")
 
 # --- 기존 if __name__ == "__main__" 블록은 main.py로 이동했으므로 제거 --- 
