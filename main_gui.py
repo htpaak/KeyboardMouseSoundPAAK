@@ -1,6 +1,7 @@
 import sys
 import os
 import traceback # traceback 임포트 추가
+import winreg # winreg 모듈 임포트 추가
 # import tkinter as tk # Tkinter 제거
 # from tkinter import messagebox # Tkinter 제거
 # import ttkbootstrap as ttk # ttkbootstrap 제거
@@ -10,7 +11,7 @@ import traceback # traceback 임포트 추가
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QPushButton, QComboBox, QSlider, QFrame, QSplitter, QStyleFactory,
-    QMessageBox, QSystemTrayIcon, QMenu, QAction, QStyle # QStyle 추가
+    QMessageBox, QSystemTrayIcon, QMenu, QAction, QStyle, QCheckBox # QCheckBox 추가
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, QUrl # QThread, QUrl 추가
 from PyQt5.QtGui import QIcon, QDesktopServices # QDesktopServices 추가
@@ -36,6 +37,11 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 # --- 헬퍼 함수 끝 --- #
+
+# --- 레지스트리 상수 --- #
+REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
+APP_NAME = "KeyboardMouseSoundPAAK"
+# --- 레지스트리 상수 끝 --- #
 
 # --- 상수 정의 (필요시 유지 또는 PyQt5 스타일로 변경) ---
 # KEY_ROW_MAP, SPECIAL_KEY_MAP 등은 로직 마이그레이션 시 함께 검토
@@ -157,6 +163,16 @@ class MainWindow(QMainWindow):
         self.connect_signals()
         self.init_tray_icon() # 트레이 아이콘 초기화 호출
 
+        # --- 시작 시 자동 시작 상태 확인 및 체크박스 설정 --- #
+        try:
+            is_startup_enabled = self._check_startup_status()
+            self.start_on_boot_checkbox.setChecked(is_startup_enabled)
+            print(f"Initial 'Start on Boot' status: {is_startup_enabled}")
+        except Exception as e:
+            print(f"Error checking startup status: {e}")
+            # 오류 발생 시 기본값 false 유지
+        # --- 상태 확인 끝 --- #
+
         # --- 스타일시트 적용 --- #
         self.apply_stylesheet()
         # -----------------------
@@ -237,11 +253,17 @@ class MainWindow(QMainWindow):
         # --- 메인 위젯 및 레이아웃 설정 ---
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
+        # main_layout = QHBoxLayout(central_widget) # 기존 코드 주석처리
+        outer_layout = QVBoxLayout(central_widget) # 전체를 감싸는 수직 레이아웃
+        outer_layout.setContentsMargins(10, 10, 10, 5) # 전체적인 여백 조정 (하단은 5)
 
+        # --- 기존 좌우 분할 레이아웃 --- # 
+        main_layout = QHBoxLayout()
         # 스플리터로 좌우 영역 나누기
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter)
+        # 좌우 섹션 생성 및 스플리터에 추가 (기존 코드와 동일)
+        # ... (keyboard_frame, mouse_frame 추가하는 부분은 여기에 위치) ...
 
         # --- 키보드 섹션 (왼쪽) ---
         keyboard_frame = QFrame()
@@ -363,6 +385,24 @@ class MainWindow(QMainWindow):
 
         # 스플리터 초기 크기 설정 (비율 조절)
         splitter.setSizes([250, 250])
+        # --- 기존 좌우 분할 레이아웃 끝 --- #
+
+        outer_layout.addLayout(main_layout) # 기존 레이아웃을 수직 레이아웃에 추가
+
+        # --- 구분선 추가 --- #
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        outer_layout.addWidget(separator)
+
+        # --- 하단 "Start on Boot" 섹션 --- #
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setContentsMargins(0, 5, 0, 0) # 상단 여백만 조금 줌
+        self.start_on_boot_checkbox = QCheckBox("Start on Boot")
+        bottom_layout.addWidget(self.start_on_boot_checkbox)
+        bottom_layout.addStretch(1) # 체크박스를 왼쪽으로 밀착
+        outer_layout.addLayout(bottom_layout)
+        # --- 하단 섹션 끝 --- #
 
     def apply_stylesheet(self):
         """애플리케이션에 커스텀 스타일시트를 적용합니다."""
@@ -565,6 +605,9 @@ class MainWindow(QMainWindow):
         # 피드백 버튼 클릭
         self.feedback_button.clicked.connect(self._open_feedback_link)
 
+        # 시작 시 부팅 체크박스
+        self.start_on_boot_checkbox.stateChanged.connect(self._toggle_start_on_boot)
+
     # --- 슬롯(콜백) 메서드 --- #
     def _keyboard_pack_changed(self, pack_name):
         self.keyboard_selected_pack = pack_name
@@ -597,6 +640,112 @@ class MainWindow(QMainWindow):
         self.mouse_start_button.setEnabled(not is_running)
         self.mouse_stop_button.setEnabled(is_running)
         self.mouse_sound_combobox.setEnabled(not is_running)
+
+    def _toggle_start_on_boot(self, state):
+        """'Start on Boot' 체크박스 상태 변경 시 호출됩니다."""
+        is_checked = (state == Qt.Checked)
+        print(f"'Start on Boot' checkbox toggled: {is_checked}")
+        # TODO: 실제 부팅 시 자동 시작 로직 구현 (Windows 레지스트리 수정 필요)
+        if is_checked:
+            # print("  -> Enabling start on boot (placeholder)")
+            try:
+                if self._add_to_startup():
+                    print("Successfully added to startup.")
+                else:
+                    # _add_to_startup 내부에서 이미 오류 메시지 표시 가정
+                    self.start_on_boot_checkbox.setChecked(False) # 실패 시 체크 해제
+            except Exception as e:
+                 print(f"Error adding to startup (unexpected): {e}")
+                 QMessageBox.critical(self, "Error", f"Unexpected error enabling Start on Boot.\n{e}")
+                 self.start_on_boot_checkbox.setChecked(False)
+        else:
+            # print("  -> Disabling start on boot (placeholder)")
+            try:
+                if self._remove_from_startup():
+                    print("Successfully removed from startup.")
+                else:
+                    # _remove_from_startup 내부에서 이미 오류 메시지 표시 가정
+                    # 실패해도 체크 상태는 유지하는 것이 사용자 경험상 나을 수 있음
+                    # self.start_on_boot_checkbox.setChecked(True)
+                    pass
+            except Exception as e:
+                 print(f"Error removing from startup (unexpected): {e}")
+                 QMessageBox.critical(self, "Error", f"Unexpected error disabling Start on Boot.\n{e}")
+
+    def _add_to_startup(self):
+        """애플리케이션을 Windows 시작 프로그램에 등록합니다."""
+        try:
+            executable_path = sys.executable
+            # PyInstaller로 빌드된 경우 .exe 경로, 개발 중에는 python.exe 경로일 수 있음
+            # 패키징된 .exe 상태에서만 등록하는 것이 안전
+            if not getattr(sys, 'frozen', False):
+                print("Not running as a frozen executable. Skipping add to startup.")
+                QMessageBox.warning(self, "Warning", "Start on Boot can only be enabled for the packaged (.exe) version.")
+                return False
+
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_WRITE)
+            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{executable_path}"') # 경로에 공백 있을 수 있으므로 따옴표 추가
+            winreg.CloseKey(key)
+            return True
+        except FileNotFoundError:
+            # 키가 없는 경우 (드묾)
+            try:
+                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_PATH)
+                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{executable_path}"')
+                winreg.CloseKey(key)
+                return True
+            except Exception as e:
+                 print(f"Error creating registry key and adding value: {e}")
+                 QMessageBox.critical(self, "Registry Error", f"Failed to create registry key and add startup entry.\n{e}")
+                 return False
+        except PermissionError:
+            print("Permission denied to write to registry.")
+            QMessageBox.warning(self, "Permission Denied", "Could not write to registry. Try running as administrator if needed.")
+            return False
+        except Exception as e:
+            print(f"Error adding to startup: {e}")
+            QMessageBox.critical(self, "Registry Error", f"Failed to add application to startup.\n{e}")
+            return False
+
+    def _remove_from_startup(self):
+        """애플리케이션을 Windows 시작 프로그램에서 제거합니다."""
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_WRITE)
+            winreg.DeleteValue(key, APP_NAME)
+            winreg.CloseKey(key)
+            return True
+        except FileNotFoundError:
+            # 이미 제거되었거나 등록된 적 없는 경우 (오류 아님)
+            print(f"Startup entry '{APP_NAME}' not found, likely already removed.")
+            return True
+        except PermissionError:
+            print("Permission denied to write to registry.")
+            QMessageBox.warning(self, "Permission Denied", "Could not write to registry. Try running as administrator if needed.")
+            return False
+        except Exception as e:
+            print(f"Error removing from startup: {e}")
+            QMessageBox.critical(self, "Registry Error", f"Failed to remove application from startup.\n{e}")
+            return False
+
+    def _check_startup_status(self):
+        """애플리케이션이 현재 시작 프로그램에 등록되어 있는지 확인합니다."""
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_READ)
+            value, reg_type = winreg.QueryValueEx(key, APP_NAME)
+            winreg.CloseKey(key)
+
+            # 저장된 경로와 현재 실행 경로가 일치하는지 확인 (따옴표 제거 후 비교)
+            current_executable = sys.executable
+            stored_executable = value.strip('"') # 저장 시 추가한 따옴표 제거
+
+            # 대소문자 구분 없이 경로 비교 (Windows 경로 특성 고려)
+            return os.path.normcase(stored_executable) == os.path.normcase(current_executable)
+        except FileNotFoundError:
+            # 값이 없으면 등록되지 않은 것
+            return False
+        except Exception as e:
+            print(f"Error checking startup status in registry: {e}")
+            return False # 오류 발생 시 비활성화 상태로 간주
 
     def _open_feedback_link(self):
         """피드백 링크를 기본 웹 브라우저에서 엽니다."""
