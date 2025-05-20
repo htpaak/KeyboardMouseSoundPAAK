@@ -671,8 +671,6 @@ class MainWindow(QMainWindow):
                 executable_path = sys.executable
                 if task_scheduler.create_admin_task(executable_path, "--background"):
                     print("Successfully added to task scheduler with admin privileges.")
-                    QMessageBox.information(self, "Success", 
-                        "Application will start automatically with admin privileges on system boot.")
                 else:
                     print("Failed to add to task scheduler.")
                     QMessageBox.critical(self, "Error", 
