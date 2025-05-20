@@ -23,6 +23,9 @@ from sound_player import SoundPlayer
 from pynput import keyboard
 from mouse_listener import MouseListener
 
+# 작업 스케줄러 모듈 import 추가
+import task_scheduler
+
 # --- 리소스 경로 헬퍼 함수 --- #
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -654,114 +657,52 @@ class MainWindow(QMainWindow):
         """'Start on Boot' 체크박스 상태 변경 시 호출됩니다."""
         is_checked = (state == Qt.Checked)
         print(f"'Start on Boot' checkbox toggled: {is_checked}")
-        # TODO: 실제 부팅 시 자동 시작 로직 구현 (Windows 레지스트리 수정 필요)
+        
         if is_checked:
-            # print("  -> Enabling start on boot (placeholder)")
             try:
-                if self._add_to_startup():
-                    print("Successfully added to startup.")
+                # 패키징된 .exe 상태에서만 등록 가능
+                if not getattr(sys, 'frozen', False):
+                    print("Not running as a frozen executable. Skipping add to startup.")
+                    QMessageBox.warning(self, "Warning", "Start on Boot can only be enabled for the packaged (.exe) version.")
+                    self.start_on_boot_checkbox.setChecked(False)
+                    return
+                
+                # 작업 스케줄러에 관리자 권한으로 실행되도록 등록
+                executable_path = sys.executable
+                if task_scheduler.create_admin_task(executable_path, "--background"):
+                    print("Successfully added to task scheduler with admin privileges.")
+                    QMessageBox.information(self, "Success", 
+                        "Application will start automatically with admin privileges on system boot.")
                 else:
-                    # _add_to_startup 내부에서 이미 오류 메시지 표시 가정
-                    self.start_on_boot_checkbox.setChecked(False) # 실패 시 체크 해제
+                    print("Failed to add to task scheduler.")
+                    QMessageBox.critical(self, "Error", 
+                        "Failed to register with Task Scheduler. Try running as administrator.")
+                    self.start_on_boot_checkbox.setChecked(False)
             except Exception as e:
-                 print(f"Error adding to startup (unexpected): {e}")
-                 QMessageBox.critical(self, "Error", f"Unexpected error enabling Start on Boot.\n{e}")
-                 self.start_on_boot_checkbox.setChecked(False)
+                print(f"Error adding to task scheduler: {e}")
+                QMessageBox.critical(self, "Error", f"Unexpected error enabling Start on Boot.\n{e}")
+                self.start_on_boot_checkbox.setChecked(False)
         else:
-            # print("  -> Disabling start on boot (placeholder)")
             try:
-                if self._remove_from_startup():
-                    print("Successfully removed from startup.")
+                # 작업 스케줄러에서 제거
+                if task_scheduler.remove_task():
+                    print("Successfully removed from task scheduler.")
                 else:
-                    # _remove_from_startup 내부에서 이미 오류 메시지 표시 가정
-                    # 실패해도 체크 상태는 유지하는 것이 사용자 경험상 나을 수 있음
-                    # self.start_on_boot_checkbox.setChecked(True)
-                    pass
+                    print("Failed to remove from task scheduler.")
+                    QMessageBox.warning(self, "Warning", 
+                        "Failed to remove from Task Scheduler. Try running as administrator.")
             except Exception as e:
-                 print(f"Error removing from startup (unexpected): {e}")
-                 QMessageBox.critical(self, "Error", f"Unexpected error disabling Start on Boot.\n{e}")
-
-    def _add_to_startup(self):
-        """애플리케이션을 Windows 시작 프로그램에 등록합니다."""
-        try:
-            executable_path = sys.executable
-            # PyInstaller로 빌드된 경우 .exe 경로, 개발 중에는 python.exe 경로일 수 있음
-            # 패키징된 .exe 상태에서만 등록하는 것이 안전
-            if not getattr(sys, 'frozen', False):
-                print("Not running as a frozen executable. Skipping add to startup.")
-                QMessageBox.warning(self, "Warning", "Start on Boot can only be enabled for the packaged (.exe) version.")
-                return False
-
-            # 실행 명령어에 --background 인자 추가
-            command = f'"{executable_path}" --background'
-
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_WRITE)
-            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, command) # 수정된 명령어 저장
-            winreg.CloseKey(key)
-            return True
-        except FileNotFoundError:
-            # 키가 없는 경우 (드묾)
-            try:
-                command = f'"{executable_path}" --background' # 여기도 수정
-                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_PATH)
-                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, command)
-                winreg.CloseKey(key)
-                return True
-            except Exception as e:
-                 print(f"Error creating registry key and adding value: {e}")
-                 QMessageBox.critical(self, "Registry Error", f"Failed to create registry key and add startup entry.\n{e}")
-                 return False
-        except PermissionError:
-            print("Permission denied to write to registry.")
-            QMessageBox.warning(self, "Permission Denied", "Could not write to registry. Try running as administrator if needed.")
-            return False
-        except Exception as e:
-            print(f"Error adding to startup: {e}")
-            QMessageBox.critical(self, "Registry Error", f"Failed to add application to startup.\n{e}")
-            return False
-
-    def _remove_from_startup(self):
-        """애플리케이션을 Windows 시작 프로그램에서 제거합니다."""
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_WRITE)
-            winreg.DeleteValue(key, APP_NAME)
-            winreg.CloseKey(key)
-            return True
-        except FileNotFoundError:
-            # 이미 제거되었거나 등록된 적 없는 경우 (오류 아님)
-            print(f"Startup entry '{APP_NAME}' not found, likely already removed.")
-            return True
-        except PermissionError:
-            print("Permission denied to write to registry.")
-            QMessageBox.warning(self, "Permission Denied", "Could not write to registry. Try running as administrator if needed.")
-            return False
-        except Exception as e:
-            print(f"Error removing from startup: {e}")
-            QMessageBox.critical(self, "Registry Error", f"Failed to remove application from startup.\n{e}")
-            return False
+                print(f"Error removing from task scheduler: {e}")
+                QMessageBox.critical(self, "Error", f"Unexpected error disabling Start on Boot.\n{e}")
 
     def _check_startup_status(self):
-        """애플리케이션이 현재 시작 프로그램에 등록되어 있는지 확인합니다."""
+        """애플리케이션이 작업 스케줄러에 등록되어 있는지 확인합니다."""
         try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_READ)
-            # 저장된 전체 명령어 읽기 (예: "C:\path\to\app.exe" --background)
-            stored_command, reg_type = winreg.QueryValueEx(key, APP_NAME)
-            winreg.CloseKey(key)
-
-            # 저장된 명령어에서 실행 파일 경로 부분만 추출 (따옴표 및 인자 제거)
-            stored_executable = stored_command.strip().split('"')[1] if stored_command.startswith('"') else stored_command.split(' ')[0]
-
-            # 현재 실행 파일 경로
-            current_executable = sys.executable
-
-            # 대소문자 구분 없이 경로 비교
-            return os.path.normcase(stored_executable) == os.path.normcase(current_executable)
-        except FileNotFoundError:
-            # 값이 없으면 등록되지 않은 것
-            return False
+            # 작업 스케줄러에서 상태 확인
+            return task_scheduler.is_task_exists()
         except Exception as e:
-            print(f"Error checking startup status in registry: {e}")
-            return False # 오류 발생 시 비활성화 상태로 간주
+            print(f"Error checking task scheduler status: {e}")
+            return False
 
     def _open_feedback_link(self):
         """피드백 링크를 기본 웹 브라우저에서 엽니다."""
